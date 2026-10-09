@@ -120,27 +120,6 @@ body {
   filter: contrast(1.05) brightness(1.02);
 }
 
-/* Holographic Laser Scan Line across Rectangular Frame */
-.intro-scan-beam {
-  position: absolute;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 4px;
-  background: linear-gradient(90deg, transparent 0%, var(--terracotta-brown) 50%, transparent 100%);
-  box-shadow: 0 0 16px var(--terracotta-brown);
-  opacity: 0.9;
-  animation: scanRect 3.2s ease-in-out infinite alternate;
-  pointer-events: none;
-  z-index: 10;
-}
-
-@keyframes scanRect {
-  0% { top: 0%; opacity: 0.3; }
-  50% { opacity: 0.95; }
-  100% { top: 98%; opacity: 0.3; }
-}
-
 .intro-progress-bar {
   width: 320px;
   height: 6px;
@@ -534,25 +513,42 @@ header {
   overflow: hidden;
 }
 
-/* Top-to-Bottom Laser Holographic Scan Line on Login Card */
+/* Holographic Laser Scan on Login Card: Bottom -> Top -> Bottom -> Disappear */
 .login-card .hologram-scan-line {
   position: absolute;
-  top: 0;
   left: 0;
   width: 100%;
   height: 3px;
   background: linear-gradient(90deg, transparent 0%, var(--terracotta-brown) 50%, transparent 100%);
-  box-shadow: 0 0 12px var(--terracotta-brown);
-  opacity: 0.85;
-  animation: scanCard 3.2s ease-in-out infinite alternate;
+  box-shadow: 0 0 14px var(--terracotta-brown);
   pointer-events: none;
   z-index: 10;
+  opacity: 0;
+  animation: scanBottomTopBottom 3.2s cubic-bezier(0.4, 0, 0.2, 1) forwards;
 }
 
-@keyframes scanCard {
-  0% { top: 0%; opacity: 0.2; }
-  50% { opacity: 0.95; }
-  100% { top: 98%; opacity: 0.25; }
+@keyframes scanBottomTopBottom {
+  0% {
+    top: 98%;
+    opacity: 0;
+  }
+  8% {
+    top: 98%;
+    opacity: 0.95;
+  }
+  50% {
+    top: 0%;
+    opacity: 0.95;
+  }
+  92% {
+    top: 98%;
+    opacity: 0.95;
+  }
+  100% {
+    top: 98%;
+    opacity: 0;
+    visibility: hidden;
+  }
 }
 
 .login-header {

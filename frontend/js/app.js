@@ -97,11 +97,17 @@ window.dismissIntro = function () {
     }, 850);
   }
 
-  // Trigger login card scale-in with top-to-bottom laser scan
+  // Trigger login card scale-in and laser scan animation (bottom -> top -> bottom -> disappear)
   const loginCard = document.querySelector(".login-card");
+  const scanLine = document.querySelector(".login-card .hologram-scan-line");
   if (loginCard) {
     loginCard.classList.remove("scale-in");
     setTimeout(() => loginCard.classList.add("scale-in"), 50);
+  }
+  if (scanLine) {
+    scanLine.style.animation = "none";
+    scanLine.offsetHeight; /* trigger reflow */
+    scanLine.style.animation = "scanBottomTopBottom 3.2s cubic-bezier(0.4, 0, 0.2, 1) forwards";
   }
 };
 
@@ -216,6 +222,15 @@ window.switchView = function (viewId) {
       el.classList.remove("scale-in");
       setTimeout(() => el.classList.add("scale-in"), 50);
     });
+
+    if (viewId === "loginView") {
+      const scanLine = target.querySelector(".login-card .hologram-scan-line");
+      if (scanLine) {
+        scanLine.style.animation = "none";
+        scanLine.offsetHeight; /* trigger reflow */
+        scanLine.style.animation = "scanBottomTopBottom 3.2s cubic-bezier(0.4, 0, 0.2, 1) forwards";
+      }
+    }
   }
 
   document.querySelectorAll(".screen-link").forEach((btn) => {
