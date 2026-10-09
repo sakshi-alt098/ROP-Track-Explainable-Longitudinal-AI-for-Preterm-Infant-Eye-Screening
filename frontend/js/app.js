@@ -110,8 +110,13 @@ function initIntroSequence() {
 
   if (!introOverlay || !introVideo) return;
 
-  // Set slow-motion playback on the intro video
+  // Ensure video plays and runs smoothly
+  introVideo.muted = true;
   introVideo.playbackRate = 0.55;
+  const playPromise = introVideo.play();
+  if (playPromise !== undefined) {
+    playPromise.catch(() => {});
+  }
   introVideo.addEventListener("play", () => {
     introVideo.playbackRate = 0.55;
   });
@@ -304,6 +309,8 @@ window.switchView = function (viewId) {
         scanLine.offsetHeight;
         scanLine.style.animation = "scanBottomTopBottom 3.2s cubic-bezier(0.4, 0, 0.2, 1) forwards";
       }
+    }
+
     if (viewId === "paymentView") {
       updatePaymentVoucherView(activePatientId);
     }
