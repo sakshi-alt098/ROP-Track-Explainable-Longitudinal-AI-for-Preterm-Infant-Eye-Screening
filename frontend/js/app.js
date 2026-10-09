@@ -247,9 +247,24 @@ window.quickLogin = function (hospitalName) {
 
 // View Navigation Switcher
 window.switchView = function (viewId) {
+  // If moving to loginView, hide the entire upper header navigation
+  const navHeader = document.getElementById("appNavigationHeader");
+  if (viewId === "loginView") {
+    if (navHeader) navHeader.style.display = "none";
+  } else {
+    if (navHeader) navHeader.style.display = "block";
+  }
+
   // Guard: Screening Assistant cannot open specialist review screens
   if (currentRole === "assistant" && (viewId === "specialistQueueView" || viewId === "specialistReviewView")) {
     alert("Access Restricted: Specialist Queue and Case Sign-Off are reserved for Pediatric Retina Specialists only. Please submit patient findings to the specialist queue.");
+    return;
+  }
+
+  // Guard: Specialist does not upload images (they review submitted captures from NICU)
+  if (currentRole === "specialist" && viewId === "visitUploadView") {
+    alert("Specialist View: Retinal image capture is performed bedside by the Screening Assistant. Please select a patient from the Specialist Queue to review and sign off.");
+    switchView("specialistQueueView");
     return;
   }
 
@@ -278,29 +293,52 @@ window.switchView = function (viewId) {
   window.scrollTo({ top: 0, behavior: "smooth" });
 };
 
-// Role Switcher with strict permission management
+// Role Switcher with strict clinical permission management
 window.setRole = function (role) {
   currentRole = role;
-  document.querySelectorAll(".role-tab").forEach((tab) => {
-    tab.classList.toggle("active", tab.dataset.role === role);
-  });
 
-  // Show/Hide Specialist Tabs based on Role
+  // Reveal top header now that role is authenticated
+  const navHeader = document.getElementById("appNavigationHeader");
+  if (navHeader) navHeader.style.display = "block";
+
   const isSpecialist = (role === "specialist");
+  const roleLabel = document.getElementById("activeRoleLabel");
+  if (roleLabel) {
+    roleLabel.innerText = isSpecialist ? "Portal: Pediatric Retina Specialist" : "Portal: NICU Screening Assistant";
+  }
+
+  const tabAssistant = document.getElementById("roleTabAssistant");
+  const tabSpec = document.getElementById("roleTabSpecialist");
+  if (tabAssistant) tabAssistant.classList.toggle("active", !isSpecialist);
+  if (tabSpec) tabSpec.classList.toggle("active", isSpecialist);
+
+  // STRICT TAB VISIBILITY:
+  // 1. Specialist tabs (Specialist Queue, Specialist Case Review):
+  //    ONLY visible to Specialist, completely HIDDEN from Screening Assistant
   document.querySelectorAll(".role-spec-only").forEach((el) => {
     el.style.display = isSpecialist ? "inline-block" : "none";
   });
 
-  if (role === "specialist") {
+  // 2. Upload/Bedside tabs (Visit + Image Upload):
+  //    VISIBLE to Screening Assistant, HIDDEN from Specialist
+  const uploadNav = document.getElementById("navLinkUpload");
+  if (uploadNav) {
+    uploadNav.style.display = isSpecialist ? "none" : "inline-block";
+  }
+
+  // 3. Routing to landing page
+  if (isSpecialist) {
     switchView("specialistQueueView");
-  } else if (role === "admin") {
-    switchView("costEstimatorView");
-  } else if (role === "login") {
-    switchView("loginView");
   } else {
-    // Screening assistant role: jump straight to Visit + Image Upload
+    // Screening assistant landing page
     switchView("visitUploadView");
   }
+};
+
+window.logoutUser = function () {
+  const navHeader = document.getElementById("appNavigationHeader");
+  if (navHeader) navHeader.style.display = "none";
+  switchView("loginView");
 };
 
 window.setPresetAndRun = function (preset) {

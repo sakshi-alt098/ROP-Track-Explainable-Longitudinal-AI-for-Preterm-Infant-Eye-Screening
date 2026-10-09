@@ -31,50 +31,51 @@
     </button>
   </div>
 
-  <!-- Offline / Brainstorming Mode Banner -->
-  <div class="offline-banner">
-    <div>
-      <strong>Offline-Ready NICU Mode:</strong> Deterministic biomarker engine active. Local analysis available with zero cloud dependency.
-    </div>
-    <div style="font-size:0.75rem;">
-      <a href="javascript:void(0);" onclick="switchView('brainstormingView')" style="color:var(--golden-tan-dark); text-decoration:underline;">Brainstorming Notes</a> | <a href="/privacy" style="color:var(--golden-tan-dark); text-decoration:underline;">Privacy Policy</a>
-    </div>
-  </div>
-
-  <!-- Main Top Header -->
-  <header>
-    <div>
-      <h1 class="brand-title">ROP-Sahayak</h1>
-      <p class="brand-subtitle">Hospital Tele-Screening, Remote Specialist Review & Longitudinal Care Platform</p>
-    </div>
-
-    <!-- Screen 1: Role Switcher / Authentication Status -->
-    <div style="display: flex; align-items: center; gap: 0.75rem;">
-      <span style="font-size: 0.75rem; color: var(--text-muted);">Active Portal:</span>
-      <div class="role-nav">
-        <button class="role-tab active" data-role="login" onclick="switchView('loginView')">Hospital Login</button>
-        <button class="role-tab" data-role="nicu" onclick="setRole('nicu')">NICU Staff</button>
-        <button class="role-tab" data-role="specialist" onclick="setRole('specialist')">Specialist Reviewer</button>
-        <button class="role-tab" data-role="admin" onclick="setRole('admin')">Admin & Billing</button>
+  <!-- APP NAVIGATION & PORTAL HEADER (HIDDEN ON LOGIN, ONLY VISIBLE AFTER AUTHENTICATION) -->
+  <div id="appNavigationHeader" style="display: none;">
+    <!-- Offline / Brainstorming Mode Banner -->
+    <div class="offline-banner">
+      <div>
+        <strong>Offline-Ready NICU Mode:</strong> Deterministic biomarker engine active. Local analysis available with zero cloud dependency.
+      </div>
+      <div style="font-size:0.75rem;">
+        <a href="javascript:void(0);" onclick="switchView('brainstormingView')" style="color:var(--golden-tan-dark); text-decoration:underline;">Brainstorming Notes</a> | <a href="/privacy" style="color:var(--golden-tan-dark); text-decoration:underline;">Privacy Policy</a>
       </div>
     </div>
-  </header>
 
-  <!-- Navigation Bar covering the Architecture Screens -->
-  <nav class="subnav-bar">
-    <button class="screen-link active" onclick="switchView('loginView')">0. Hospital Login</button>
-    <button class="screen-link" onclick="switchView('nicuDashboardView')">1. NICU Dashboard</button>
-    <button class="screen-link" onclick="switchView('patientRegView')">2. Patient Registration</button>
-    <button class="screen-link" id="navLinkUpload" onclick="switchView('visitUploadView')">3. Visit + Image Upload</button>
-    <button class="screen-link" onclick="switchView('analysisResultsView')">4. Quality & Biomarkers</button>
-    <button class="screen-link" onclick="switchView('caseSubmitView')">5. Case Submission</button>
-    <button class="screen-link role-spec-only" id="navLinkSpecQueue" onclick="switchView('specialistQueueView')">6. Specialist Queue</button>
-    <button class="screen-link role-spec-only" id="navLinkSpecReview" onclick="switchView('specialistReviewView')">7. Specialist Case Review</button>
-    <button class="screen-link" onclick="switchView('patientTimelineView')">8. Patient Timeline</button>
-    <button class="screen-link" onclick="switchView('followupTrackerView')">9. Follow-up Tracker</button>
-    <button class="screen-link" onclick="switchView('costEstimatorView')">10. Cost Estimator</button>
-    <button class="screen-link" onclick="switchView('paymentView')">11. Simulated Payment</button>
-  </nav>
+    <!-- Main Top Header -->
+    <header>
+      <div>
+        <h1 class="brand-title">ROP-Sahayak</h1>
+        <p class="brand-subtitle">Hospital Tele-Screening, Remote Specialist Review & Longitudinal Care Platform</p>
+      </div>
+
+      <!-- Active Portal & Logout Control -->
+      <div style="display: flex; align-items: center; gap: 0.75rem;">
+        <span style="font-size: 0.75rem; color: var(--text-muted);" id="activeRoleLabel">Portal: Screening Assistant</span>
+        <div class="role-nav">
+          <button class="role-tab active" id="roleTabAssistant" onclick="setRole('assistant')">Screening Assistant</button>
+          <button class="role-tab" id="roleTabSpecialist" onclick="setRole('specialist')">Specialist Reviewer</button>
+          <button class="role-tab" style="background: rgba(184,80,58,0.1); color: var(--terracotta-brown);" onclick="logoutUser()">Log Out</button>
+        </div>
+      </div>
+    </header>
+
+    <!-- Navigation Bar covering the Architecture Screens -->
+    <nav class="subnav-bar">
+      <button class="screen-link role-assist-only" id="navLinkDashboard" onclick="switchView('nicuDashboardView')">1. NICU Dashboard</button>
+      <button class="screen-link role-assist-only" id="navLinkReg" onclick="switchView('patientRegView')">2. Patient Registration</button>
+      <button class="screen-link role-assist-only" id="navLinkUpload" onclick="switchView('visitUploadView')">3. Visit + Image Upload</button>
+      <button class="screen-link" id="navLinkAnalysis" onclick="switchView('analysisResultsView')">4. Quality & Biomarkers</button>
+      <button class="screen-link role-assist-only" id="navLinkCaseSubmit" onclick="switchView('caseSubmitView')">5. Case Submission</button>
+      <button class="screen-link role-spec-only" id="navLinkSpecQueue" onclick="switchView('specialistQueueView')">6. Specialist Queue</button>
+      <button class="screen-link role-spec-only" id="navLinkSpecReview" onclick="switchView('specialistReviewView')">7. Specialist Case Review</button>
+      <button class="screen-link" id="navLinkTimeline" onclick="switchView('patientTimelineView')">8. Patient Timeline</button>
+      <button class="screen-link" id="navLinkFollowup" onclick="switchView('followupTrackerView')">9. Follow-up Tracker</button>
+      <button class="screen-link" id="navLinkCost" onclick="switchView('costEstimatorView')">10. Cost Estimator</button>
+      <button class="screen-link" id="navLinkPayment" onclick="switchView('paymentView')">11. Simulated Payment</button>
+    </nav>
+  </div>
 
   <!-- MAIN APPLICATION CONTENT VIEWS -->
   <main class="app-container">
