@@ -387,12 +387,24 @@ function renderAnalysisResults(data) {
   document.getElementById("resQualityScore").innerText = `${quality_assessment.status} (${quality_assessment.overall_score}%)`;
   document.getElementById("resQualityWarning").innerText = quality_assessment.warnings[0] || "Quality acceptable.";
 
-  // Images
+  // Images & Side-by-Side Dual View
+  const origSrc = data.original_image_base64 || biomarkers.overlay_image_base64;
+  const aiMarkedSrc = data.ai_marked_image_base64 || biomarkers.overlay_image_base64;
   const overlaySrc = biomarkers.overlay_image_base64;
-  document.getElementById("resOverlayImg").src = overlaySrc;
-  if (document.getElementById("capturePreviewImg")) document.getElementById("capturePreviewImg").src = overlaySrc;
-  if (document.getElementById("specOrigImg")) document.getElementById("specOrigImg").src = overlaySrc;
-  if (document.getElementById("specOverlayImg")) document.getElementById("specOverlayImg").src = overlaySrc;
+
+  if (document.getElementById("resOriginalImg")) document.getElementById("resOriginalImg").src = origSrc;
+  if (document.getElementById("resAiMarkedImg")) document.getElementById("resAiMarkedImg").src = aiMarkedSrc;
+  if (document.getElementById("capturePreviewImg")) document.getElementById("capturePreviewImg").src = origSrc;
+  if (document.getElementById("resOverlayImg")) document.getElementById("resOverlayImg").src = overlaySrc;
+  if (document.getElementById("specOrigImg")) document.getElementById("specOrigImg").src = origSrc;
+  if (document.getElementById("specOverlayImg")) document.getElementById("specOverlayImg").src = aiMarkedSrc;
+
+  // Update abnormality count badge
+  const abnCountBadge = document.getElementById("resAbnormalityCountBadge");
+  if (abnCountBadge) {
+    const numAbnormalities = data.abnormality_zones ? data.abnormality_zones.length : 0;
+    abnCountBadge.innerText = `${numAbnormalities} Red Lesion Area${numAbnormalities === 1 ? '' : 's'} Flagged`;
+  }
 
   // Diagnostic fields
   document.getElementById("resStageName").innerText = icrop3_diagnosis.stage_name;

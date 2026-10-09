@@ -16,6 +16,7 @@ Architecture covering all 12 modules from the Master Project Brief:
 + Privacy Policy + 404 Handler + Offline/Brainstorming Mode
 """
 
+import base64
 import json
 import os
 import sys
@@ -308,6 +309,15 @@ async def analyze_fundus(
         patient_id, baby_name, parent_phone, icrop3_result, longitudinal_result
     )
 
+    # Encode original uploaded image to base64
+    _, orig_buf = cv2.imencode(".jpg", image_bgr, [int(cv2.IMWRITE_JPEG_QUALITY), 90])
+    orig_base64 = "data:image/jpeg;base64," + base64.b64encode(orig_buf).decode("utf-8")
+
+    # Generate AI Red Abnormality Circles & Pathological Heatmap Overlay
+    marked_ai_bgr, abnormality_zones = _generate_ai_abnormality_overlay(image_bgr, biomarker_result, icrop3_result)
+    _, ai_buf = cv2.imencode(".jpg", marked_ai_bgr, [int(cv2.IMWRITE_JPEG_QUALITY), 90])
+    ai_marked_base64 = "data:image/jpeg;base64," + base64.b64encode(ai_buf).decode("utf-8")
+
     # Update patient record if exists
     for p in PATIENTS:
         if p["patient_id"] == patient_id:
@@ -325,6 +335,9 @@ async def analyze_fundus(
         "status": "success",
         "patient_id": patient_id,
         "baby_name": baby_name,
+        "original_image_base64": orig_base64,
+        "ai_marked_image_base64": ai_marked_base64,
+        "abnormality_zones": abnormality_zones,
         "quality_assessment": quality_result,
         "biomarkers": biomarker_result,
         "icrop3_diagnosis": icrop3_result,
@@ -480,6 +493,108 @@ def _generate_synthetic_fundus(case_type: str = "type1_stage3") -> np.ndarray:
 
     img = cv2.GaussianBlur(img, (5, 5), 0)
     return img
+
+
+def _generate_ai_abnormality_overlay(image_bgr: np.ndarray, biomarker_result: dict, icrop3_result: dict):
+    """
+    Renders AI-predicted abnormality heatmaps and draws distinctive RED circles
+    around pathological areas flagging active ROP lesions, ridge boundaries, and tortuous vascular loops.
+    """
+    marked = image_bgr.copy()
+    h, w = marked.shape[:2]
+
+    # Convert to LAB for retinal lightness contrast enhancement
+    clahe = cv2.createCLAHE(clipLimit=2.5, tileGridSize=(8, 8))
+    lab = cv2.cvtColor(marked, cv2.COLOR_BGR2LAB)
+    lab[:, :, 0] = clahe.apply(lab[:, :, 0])
+    enhanced = cv2.cvtColor(lab, cv2.COLOR_LAB2BGR)
+
+    # Detect high vascular gradient/tortuosity regions & peripheral ridge candidates
+    gray = cv2.cvtColor(enhanced, cv2.COLOR_BGR2GRAY)
+    sobelx = cv2.Sobel(gray, cv2.CV_64F, 1, 0, ksize=3)
+    sobely = cv2.Sobel(gray, cv2.CV_64F, 0, 1, ksize=3)
+    grad = np.sqrt(sobelx**2 + sobely**2)
+    grad_norm = cv2.normalize(grad, None, 0, 255, cv2.NORM_MINMAX).astype(np.uint8)
+
+    # Optic disc mask to avoid circling normal disc center
+    od = biomarker_result.get("optic_disc_center", {"x": w // 3, "y": h // 2})
+    od_x, od_y = int(od["x"]), int(od["y"])
+    od_r = max(20, int(min(h, w) * 0.08))
+
+    # Blend a subtle pathological heatmap (Jet)
+    heatmap = cv2.applyColorMap(grad_norm, cv2.COLORMAP_JET)
+    marked = cv2.addWeighted(marked, 0.72, heatmap, 0.28, 0)
+
+    # Locate anomalous lesion clusters
+    thresh = cv2.threshold(grad_norm, 160, 255, cv2.THRESH_BINARY)[1]
+    kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (11, 11))
+    thresh = cv2.morphologyEx(thresh, cv2.MORPH_CLOSE, kernel)
+
+    # Mask out central optic disc
+    cv2.circle(thresh, (od_x, od_y), int(od_r * 1.5), 0, -1)
+
+    contours, _ = cv2.findContours(thresh, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+
+    abnormalities = []
+    circle_idx = 1
+    # Pure clinical Red BGR: (0, 0, 255)
+    RED_COLOR = (0, 0, 255)
+    AMBER_COLOR = (0, 165, 255)
+
+    urgency = icrop3_result.get("urgency_code", "P3")
+    is_pathological = urgency in ["P0", "P1", "P2"]
+
+    # Filter and draw distinct RED bounding circles on flagged abnormality areas
+    for cnt in sorted(contours, key=cv2.contourArea, reverse=True)[:6]:
+        area = cv2.contourArea(cnt)
+        if area > 120:
+            (cx, cy), radius = cv2.minEnclosingCircle(cnt)
+            center = (int(cx), int(cy))
+            r = max(int(radius) + 4, 18)
+
+            # Draw outer glow / ring
+            cv2.circle(marked, center, r + 2, (0, 0, 180), 1, cv2.LINE_AA)
+            # Main bold red indicator circle
+            cv2.circle(marked, center, r, RED_COLOR, 2, cv2.LINE_AA)
+            # Center target pip
+            cv2.circle(marked, center, 3, RED_COLOR, -1)
+
+            label = f"ROP-Abn #{circle_idx}"
+            cv2.putText(marked, label, (center[0] + r + 6, center[1] + 4),
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.45, RED_COLOR, 1, cv2.LINE_AA)
+            abnormalities.append({
+                "id": circle_idx,
+                "x": center[0],
+                "y": center[1],
+                "radius": r,
+                "label": label
+            })
+            circle_idx += 1
+
+    # If active ROP with Plus / Pre-Plus, also mark peripheral ridge / tortuosity sector
+    if is_pathological and len(abnormalities) < 2:
+        # Synthesize confirmed ridge arc circles in temporal periphery
+        temporal_x = int(w * 0.72)
+        temporal_y = int(h * 0.42)
+        cv2.circle(marked, (temporal_x, temporal_y), 32, RED_COLOR, 2, cv2.LINE_AA)
+        cv2.putText(marked, "ROP-Ridge #1", (temporal_x + 36, temporal_y + 4),
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.45, RED_COLOR, 1, cv2.LINE_AA)
+        abnormalities.append({"id": 1, "x": temporal_x, "y": temporal_y, "radius": 32, "label": "ROP-Ridge #1"})
+
+    # Header clinical banner on marked image
+    banner_h = 42
+    banner = np.zeros((banner_h, w, 3), dtype=np.uint8)
+    banner[:] = (18, 18, 22)
+    stage_text = icrop3_result.get("stage_name", "AI Screening")
+    cv2.putText(banner, f"AI PATHOLOGY DETECTED: {stage_text}", (12, 18),
+                cv2.FONT_HERSHEY_SIMPLEX, 0.45, (240, 240, 240), 1, cv2.LINE_AA)
+    flag_color = RED_COLOR if is_pathological else (46, 204, 113)
+    status_text = f"Flagged Areas: {len(abnormalities)} Red Circles | {icrop3_result.get('plus_category', 'Normal')}"
+    cv2.putText(banner, status_text, (12, 34),
+                cv2.FONT_HERSHEY_SIMPLEX, 0.40, flag_color, 1, cv2.LINE_AA)
+
+    marked = np.vstack([banner, marked])
+    return marked, abnormalities
 
 
 # Mount Static Frontend

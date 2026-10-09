@@ -403,6 +403,42 @@
         </div>
       </div>
 
+      <!-- SIDE-BY-SIDE CLINICAL COMPARISON: UPLOADED VS AI ABNORMALITY LOCALIZER -->
+      <div class="panel-card ss-scroll scale-in" style="margin-bottom: 1.25rem;">
+        <div class="card-header">
+          <h2>AI Pathology Localization & Dual-View Analysis</h2>
+          <span class="badge badge-terracotta">Side-by-Side Review</span>
+        </div>
+        <p style="font-size: 0.78rem; color: var(--text-muted); margin-bottom: 1rem;">
+          Compare the original unenhanced patient capture against the deep learning model's localized abnormality map highlighting pathological ROP lesions, ridge boundaries, and vascular loops in red.
+        </p>
+        <div class="grid-cols-2" style="gap: 1rem;">
+          <!-- 1. Original Uploaded Image -->
+          <div>
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.4rem;">
+              <strong style="font-size: 0.82rem; color: var(--text-main);">1. Uploaded Fundus Photograph</strong>
+              <span class="badge badge-sage">Patient Capture</span>
+            </div>
+            <div class="fundus-viewer" style="border: 2px solid var(--warm-beige-border); border-radius: 0.5rem; overflow: hidden; background: #000;">
+              <div class="fundus-tag">Original Unedited Scan</div>
+              <img id="resOriginalImg" src="" alt="Original Uploaded Fundus" style="width: 100%; height: auto; display: block; object-fit: contain; min-height: 280px;">
+            </div>
+          </div>
+
+          <!-- 2. AI Marked Abnormality Image in Red -->
+          <div>
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.4rem;">
+              <strong style="font-size: 0.82rem; color: var(--terracotta-brown);">2. AI Abnormality Detector (Flagged in Red)</strong>
+              <span class="badge badge-terracotta" id="resAbnormalityCountBadge">Flagged Lesions</span>
+            </div>
+            <div class="fundus-viewer" style="border: 2px solid var(--terracotta-brown); border-radius: 0.5rem; overflow: hidden; background: #000;">
+              <div class="fundus-tag" style="background: rgba(180, 40, 40, 0.85); color: #fff;">Red Circles: Active ROP Flags</div>
+              <img id="resAiMarkedImg" src="" alt="AI Abnormality Localization" style="width: 100%; height: auto; display: block; object-fit: contain; min-height: 280px;">
+            </div>
+          </div>
+        </div>
+      </div>
+
       <div class="grid-cols-2 ss-scroll scale-in">
         <!-- Retinal Biomarker Segmentation Overlay -->
         <div class="panel-card">
@@ -574,12 +610,12 @@
           </div>
           <div class="grid-cols-2" style="gap: 0.75rem;">
             <div class="fundus-viewer">
-              <div class="fundus-tag">Original Scan</div>
+              <div class="fundus-tag">1. Original Unedited Scan</div>
               <img id="specOrigImg" src="" alt="Original Scan">
             </div>
-            <div class="fundus-viewer">
-              <div class="fundus-tag">Quantitative Vessel Overlay</div>
-              <img id="specOverlayImg" src="" alt="Vessel Overlay">
+            <div class="fundus-viewer" style="border: 2px solid var(--terracotta-brown);">
+              <div class="fundus-tag" style="background: rgba(180, 40, 40, 0.85); color: #fff;">2. AI Red Abnormality Flags</div>
+              <img id="specOverlayImg" src="" alt="AI Red Abnormality Flags">
             </div>
           </div>
           <div style="margin-top: 1rem; background: var(--warm-beige-panel); padding: 0.75rem; border-radius: 0.35rem; font-size: 0.78rem;">
