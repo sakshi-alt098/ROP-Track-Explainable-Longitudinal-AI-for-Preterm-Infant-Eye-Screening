@@ -65,11 +65,11 @@
     <button class="screen-link active" onclick="switchView('loginView')">0. Hospital Login</button>
     <button class="screen-link" onclick="switchView('nicuDashboardView')">1. NICU Dashboard</button>
     <button class="screen-link" onclick="switchView('patientRegView')">2. Patient Registration</button>
-    <button class="screen-link" onclick="switchView('visitUploadView')">3. Visit + Image Upload</button>
+    <button class="screen-link" id="navLinkUpload" onclick="switchView('visitUploadView')">3. Visit + Image Upload</button>
     <button class="screen-link" onclick="switchView('analysisResultsView')">4. Quality & Biomarkers</button>
     <button class="screen-link" onclick="switchView('caseSubmitView')">5. Case Submission</button>
-    <button class="screen-link" onclick="switchView('specialistQueueView')">6. Specialist Queue</button>
-    <button class="screen-link" onclick="switchView('specialistReviewView')">7. Specialist Case Review</button>
+    <button class="screen-link role-spec-only" id="navLinkSpecQueue" onclick="switchView('specialistQueueView')">6. Specialist Queue</button>
+    <button class="screen-link role-spec-only" id="navLinkSpecReview" onclick="switchView('specialistReviewView')">7. Specialist Case Review</button>
     <button class="screen-link" onclick="switchView('patientTimelineView')">8. Patient Timeline</button>
     <button class="screen-link" onclick="switchView('followupTrackerView')">9. Follow-up Tracker</button>
     <button class="screen-link" onclick="switchView('costEstimatorView')">10. Cost Estimator</button>
@@ -101,9 +101,33 @@
           </div>
           
           <form class="login-form" id="loginForm" novalidate>
+            <!-- ROLE SELECTION RADIO CARDS: SCREENING ASSISTANT VS SPECIALIST -->
+            <div class="form-group" style="margin-bottom: 1.1rem;">
+              <label style="font-size: 0.78rem; font-weight: 700; color: var(--terracotta-brown); margin-bottom: 0.4rem; display: block;">Select Clinical Role *</label>
+              <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem;">
+                <label id="roleCardAssistant" class="role-selector-card selected" style="cursor: pointer; padding: 0.75rem; border: 2px solid var(--terracotta-brown); border-radius: 0.65rem; background: var(--warm-beige-panel); display: flex; flex-direction: column; gap: 0.25rem; transition: all 0.2s ease;">
+                  <input type="radio" name="portalRole" value="assistant" checked style="display: none;">
+                  <div style="display: flex; align-items: center; gap: 0.4rem;">
+                    <span style="font-size: 1rem;">🩺</span>
+                    <strong style="font-size: 0.8rem; color: var(--terracotta-brown);">Screening Assistant</strong>
+                  </div>
+                  <span style="font-size: 0.68rem; color: var(--text-muted); line-height: 1.25;">NICU Bedside, image capture, patient triage</span>
+                </label>
+
+                <label id="roleCardSpecialist" class="role-selector-card" style="cursor: pointer; padding: 0.75rem; border: 1px solid var(--warm-beige-border); border-radius: 0.65rem; background: #FFFFFF; display: flex; flex-direction: column; gap: 0.25rem; transition: all 0.2s ease;">
+                  <input type="radio" name="portalRole" value="specialist" style="display: none;">
+                  <div style="display: flex; align-items: center; gap: 0.4rem;">
+                    <span style="font-size: 1rem;">🔬</span>
+                    <strong style="font-size: 0.8rem; color: var(--text-main);">Specialist</strong>
+                  </div>
+                  <span style="font-size: 0.68rem; color: var(--text-muted); line-height: 1.25;">Pediatric Retina consultant, remote tele-review</span>
+                </label>
+              </div>
+            </div>
+
             <div class="form-group">
               <div class="input-group neu-input">
-                <input type="email" id="email" name="email" required autocomplete="email" placeholder=" " value="doctor.nicu@aiims.edu">
+                <input type="email" id="email" name="email" required autocomplete="email" placeholder=" ">
                 <label for="email">Institutional email address</label>
                 <div class="input-icon">
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -117,7 +141,7 @@
 
             <div class="form-group">
               <div class="input-group neu-input password-group">
-                <input type="password" id="password" name="password" required autocomplete="current-password" placeholder=" " value="NicuCare2026!">
+                <input type="password" id="password" name="password" required autocomplete="current-password" placeholder=" ">
                 <label for="password">Hospital Security PIN / Password</label>
                 <div class="input-icon">
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -384,24 +408,45 @@
 
     <!-- SCREEN 5: QUALITY + ANALYSIS RESULTS -->
     <section id="analysisResultsView" class="view-section">
-      <div class="panel-card ss-scroll scale-in" style="border-left: 4px solid var(--terracotta-brown);">
-        <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.75rem;">
-          <div>
-            <span id="resUrgencyBadge" class="badge badge-terracotta">P1: Type 1 ROP (High Urgency)</span>
-            <h2 id="resActionHeading" style="font-size: 1rem; color: var(--terracotta-brown); margin-top: 0.35rem;">
-              Treatment Recommended Within 72 Hours
-            </h2>
-          </div>
-          <div style="text-align: right;">
-            <div style="font-size: 0.75rem; color: var(--text-muted);">
-              Quality Gate: <strong id="resQualityScore" style="color: var(--sage-green-dark);">Optimal (88%)</strong>
+      <!-- EMPTY STATE: DISPLAYED BEFORE AN IMAGE IS ANALYZED -->
+      <div id="resultsEmptyState" class="panel-card ss-scroll scale-in" style="text-align: center; padding: 3.5rem 1.5rem; background: var(--warm-beige-panel); border: 2px dashed var(--warm-beige-border);">
+        <div style="font-size: 3rem; margin-bottom: 0.75rem;">👁️</div>
+        <h2 style="font-size: 1.25rem; color: var(--terracotta-brown); margin-bottom: 0.4rem;">There's nothing to see here yet</h2>
+        <p style="font-size: 0.85rem; color: var(--text-muted); max-width: 480px; margin: 0 auto 1.25rem auto; line-height: 1.5;">
+          No fundus photograph has been analyzed for this session. Upload an infant's retinal image from the visit screening tab to generate AI pathology localization and ICROP-3 diagnostic metrics.
+        </p>
+        <button class="btn-primary" onclick="switchView('visitUploadView')">Go to Image Upload & Screening &rarr;</button>
+      </div>
+
+      <!-- ML ANALYSIS LOADING OVERLAY -->
+      <div id="mlAnalysisLoader" style="display: none; text-align: center; padding: 3rem 1.5rem; background: var(--warm-beige-panel); border-radius: 0.75rem; border: 1px solid var(--warm-beige-border); margin-bottom: 1.25rem;">
+        <div class="neu-spinner" style="width: 48px; height: 48px; margin: 0 auto 1.25rem auto; border-top-color: var(--terracotta-brown);"></div>
+        <h3 style="color: var(--terracotta-brown); font-size: 1.1rem; margin-bottom: 0.35rem;">Running Deep Learning Pathology Extraction...</h3>
+        <p style="font-size: 0.82rem; color: var(--text-muted); line-height: 1.5;">
+          Applying CLAHE vessel enhancement &bull; Computing Arteriolar Tortuosity &bull; Tracing demarcation ridges in red...
+        </p>
+      </div>
+
+      <!-- POPULATED ANALYSIS CONTENT (HIDDEN UNTIL UPLOADED & ANALYZED) -->
+      <div id="resultsContentArea" style="display: none;">
+        <div class="panel-card ss-scroll scale-in" style="border-left: 4px solid var(--terracotta-brown);">
+          <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.75rem;">
+            <div>
+              <span id="resUrgencyBadge" class="badge badge-terracotta">P1: Type 1 ROP (High Urgency)</span>
+              <h2 id="resActionHeading" style="font-size: 1rem; color: var(--terracotta-brown); margin-top: 0.35rem;">
+                Treatment Recommended Within 72 Hours
+              </h2>
             </div>
-            <div id="resQualityWarning" style="font-size: 0.7rem; color: var(--text-muted); margin-top: 0.2rem;">
-              Laplacian & contrast within clinical thresholds.
+            <div style="text-align: right;">
+              <div style="font-size: 0.75rem; color: var(--text-muted);">
+                Quality Gate: <strong id="resQualityScore" style="color: var(--sage-green-dark);">Optimal (88%)</strong>
+              </div>
+              <div id="resQualityWarning" style="font-size: 0.7rem; color: var(--text-muted); margin-top: 0.2rem;">
+                Laplacian & contrast within clinical thresholds.
+              </div>
             </div>
           </div>
         </div>
-      </div>
 
       <!-- SIDE-BY-SIDE CLINICAL COMPARISON: UPLOADED VS AI ABNORMALITY LOCALIZER -->
       <div class="panel-card ss-scroll scale-in" style="margin-bottom: 1.25rem;">
@@ -498,6 +543,7 @@
           </div>
         </div>
       </div>
+    </div>
     </section>
 
     <!-- SCREEN 6: CASE SUBMISSION -->

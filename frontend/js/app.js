@@ -1,6 +1,6 @@
 // ROP-Sahayak Full-Stack Interactive Controller
-let currentRole = "nicu";
-let selectedPreset = "type1_stage3";
+let currentRole = "assistant";
+let selectedPreset = null;
 let latestAnalysisData = null;
 let introDismissed = false;
 
@@ -9,7 +9,31 @@ document.addEventListener("DOMContentLoaded", () => {
   initScrollAnimations();
   initLoginForm();
   loadPatients();
-  runAnalysis();
+
+  // Role selector cards toggle in login
+  const cardAssistant = document.getElementById("roleCardAssistant");
+  const cardSpec = document.getElementById("roleCardSpecialist");
+  if (cardAssistant && cardSpec) {
+    cardAssistant.addEventListener("click", () => {
+      cardAssistant.classList.add("selected");
+      cardAssistant.style.border = "2px solid var(--terracotta-brown)";
+      cardAssistant.style.background = "var(--warm-beige-panel)";
+      cardSpec.classList.remove("selected");
+      cardSpec.style.border = "1px solid var(--warm-beige-border)";
+      cardSpec.style.background = "#FFFFFF";
+      cardAssistant.querySelector("input").checked = true;
+    });
+
+    cardSpec.addEventListener("click", () => {
+      cardSpec.classList.add("selected");
+      cardSpec.style.border = "2px solid var(--terracotta-brown)";
+      cardSpec.style.background = "var(--warm-beige-panel)";
+      cardAssistant.classList.remove("selected");
+      cardAssistant.style.border = "1px solid var(--warm-beige-border)";
+      cardAssistant.style.background = "#FFFFFF";
+      cardSpec.querySelector("input").checked = true;
+    });
+  }
 
   // Handle Patient Registration Form Submit
   const regForm = document.getElementById("patientRegForm");
@@ -171,12 +195,16 @@ function initLoginForm() {
       if (!passVal) {
         passwordError.innerText = "Hospital security password/PIN is required.";
         isValid = false;
-      } else if (passVal.length < 6) {
-        passwordError.innerText = "PIN must be at least 6 characters.";
+      } else if (passVal.length < 4) {
+        passwordError.innerText = "PIN must be at least 4 characters.";
         isValid = false;
       }
 
       if (!isValid) return;
+
+      // Detect chosen clinical role
+      const selectedRoleRadio = document.querySelector('input[name="portalRole"]:checked');
+      const chosenRole = selectedRoleRadio ? selectedRoleRadio.value : "assistant";
 
       // Show Neumorphic Loading State
       loginSubmitBtn.classList.add("loading");
@@ -190,34 +218,45 @@ function initLoginForm() {
         successMessage.classList.add("show");
 
         setTimeout(() => {
-          setRole("nicu");
-          switchView("nicuDashboardView");
+          setRole(chosenRole);
+          if (chosenRole === "assistant") {
+            switchView("visitUploadView");
+          } else {
+            switchView("specialistQueueView");
+          }
           // Reset login view for future use
           loginForm.style.display = "block";
           document.querySelector(".divider").style.display = "flex";
           document.querySelector(".social-login").style.display = "flex";
           document.querySelector(".signup-link").style.display = "block";
           successMessage.classList.remove("show");
-        }, 1200);
-      }, 900);
+        }, 1100);
+      }, 800);
     });
   }
 }
 
 window.quickLogin = function (hospitalName) {
   const emailInput = document.getElementById("email");
-  if (emailInput) emailInput.value = `duty.doctor@${hospitalName.toLowerCase().replace(/[^a-z0-9]/g, "")}.in`;
+  const passInput = document.getElementById("password");
+  if (emailInput) emailInput.value = `staff@${hospitalName.toLowerCase().replace(/[^a-z0-9]/g, "")}.in`;
+  if (passInput) passInput.value = "HospitalPass123";
   const form = document.getElementById("loginForm");
   if (form) form.dispatchEvent(new Event("submit"));
 };
 
 // View Navigation Switcher
 window.switchView = function (viewId) {
+  // Guard: Screening Assistant cannot open specialist review screens
+  if (currentRole === "assistant" && (viewId === "specialistQueueView" || viewId === "specialistReviewView")) {
+    alert("Access Restricted: Specialist Queue and Case Sign-Off are reserved for Pediatric Retina Specialists only. Please submit patient findings to the specialist queue.");
+    return;
+  }
+
   document.querySelectorAll(".view-section").forEach((sec) => sec.classList.remove("active"));
   const target = document.getElementById(viewId);
   if (target) {
     target.classList.add("active");
-    // Trigger scroll scale-in animation on new view elements
     target.querySelectorAll(".ss-scroll").forEach((el) => {
       el.classList.remove("scale-in");
       setTimeout(() => el.classList.add("scale-in"), 50);
@@ -227,7 +266,7 @@ window.switchView = function (viewId) {
       const scanLine = target.querySelector(".login-card .hologram-scan-line");
       if (scanLine) {
         scanLine.style.animation = "none";
-        scanLine.offsetHeight; /* trigger reflow */
+        scanLine.offsetHeight;
         scanLine.style.animation = "scanBottomTopBottom 3.2s cubic-bezier(0.4, 0, 0.2, 1) forwards";
       }
     }
@@ -239,11 +278,17 @@ window.switchView = function (viewId) {
   window.scrollTo({ top: 0, behavior: "smooth" });
 };
 
-// Role Switcher
+// Role Switcher with strict permission management
 window.setRole = function (role) {
   currentRole = role;
   document.querySelectorAll(".role-tab").forEach((tab) => {
     tab.classList.toggle("active", tab.dataset.role === role);
+  });
+
+  // Show/Hide Specialist Tabs based on Role
+  const isSpecialist = (role === "specialist");
+  document.querySelectorAll(".role-spec-only").forEach((el) => {
+    el.style.display = isSpecialist ? "inline-block" : "none";
   });
 
   if (role === "specialist") {
@@ -253,7 +298,8 @@ window.setRole = function (role) {
   } else if (role === "login") {
     switchView("loginView");
   } else {
-    switchView("nicuDashboardView");
+    // Screening assistant role: jump straight to Visit + Image Upload
+    switchView("visitUploadView");
   }
 };
 
@@ -355,17 +401,33 @@ async function runAnalysis() {
   const fileIn = document.getElementById("fundusFileInput");
   const pma = document.getElementById("visitPma")?.value || 34.0;
   const wg = document.getElementById("visitWg")?.value || 10.0;
+  const patientSelect = document.getElementById("visitPatientSelect");
+  const patientId = patientSelect ? patientSelect.value : "ROP-2026-001";
 
-  formData.append("patient_id", "ROP-2026-001");
-  formData.append("baby_name", "Sharma (Twin 1)");
+  formData.append("patient_id", patientId);
+  formData.append("baby_name", "Preterm Infant");
   formData.append("postmenstrual_age_weeks", pma);
   formData.append("weight_gain_g_per_day", wg);
 
-  if (fileIn && fileIn.files.length > 0) {
+  const hasFile = fileIn && fileIn.files.length > 0;
+  if (hasFile) {
     formData.append("file", fileIn.files[0]);
   } else if (selectedPreset) {
     formData.append("sample_case", selectedPreset);
+  } else {
+    alert("Please select or upload a fundus photograph to initiate AI screening.");
+    return;
   }
+
+  // Switch to Analysis Results View with Loading Animation
+  switchView("analysisResultsView");
+  const emptyState = document.getElementById("resultsEmptyState");
+  const loader = document.getElementById("mlAnalysisLoader");
+  const contentArea = document.getElementById("resultsContentArea");
+
+  if (emptyState) emptyState.style.display = "none";
+  if (contentArea) contentArea.style.display = "none";
+  if (loader) loader.style.display = "block";
 
   try {
     const res = await fetch("/api/analyze", { method: "POST", body: formData });
@@ -374,11 +436,23 @@ async function runAnalysis() {
     renderAnalysisResults(data);
   } catch (err) {
     console.error("Analysis execution error", err);
+    if (loader) loader.style.display = "none";
+    if (emptyState) emptyState.style.display = "block";
+    alert("Analysis failed. Please check the network connection and try again.");
   }
 }
 
 function renderAnalysisResults(data) {
   const { quality_assessment, biomarkers, icrop3_diagnosis, longitudinal_progression, scheduler_and_alerts } = data;
+
+  // Reveal populated results and hide loader
+  const loader = document.getElementById("mlAnalysisLoader");
+  const contentArea = document.getElementById("resultsContentArea");
+  const emptyState = document.getElementById("resultsEmptyState");
+
+  if (loader) loader.style.display = "none";
+  if (emptyState) emptyState.style.display = "none";
+  if (contentArea) contentArea.style.display = "block";
 
   // Quality & Urgency Header
   document.getElementById("resUrgencyBadge").innerText = `${icrop3_diagnosis.urgency_code}: ${icrop3_diagnosis.urgency_label}`;
