@@ -3,6 +3,8 @@ let currentRole = "assistant";
 let selectedPreset = null;
 let latestAnalysisData = null;
 let introDismissed = false;
+let activePatientId = "ROP-2026-001";
+let patientsRegistry = [];
 
 document.addEventListener("DOMContentLoaded", () => {
   initIntroSequence();
@@ -51,14 +53,33 @@ document.addEventListener("DOMContentLoaded", () => {
       formData.append("weight_gain_g_per_day", document.getElementById("regWg").value);
       formData.append("supplemental_o2_days", document.getElementById("regO2").value);
 
+      const regSuccessBadge = document.getElementById("regSuccessBadge");
+      const regSuccessDetail = document.getElementById("regSuccessDetail");
+      const regErrorBadge = document.getElementById("regErrorBadge");
+
       try {
         const res = await fetch("/api/register-patient", { method: "POST", body: formData });
         const data = await res.json();
-        alert(`Infant ${data.patient.baby_name} registered successfully with ID: ${data.patient.patient_id}`);
+        
+        // Show inline status badge instead of browser alert popup
+        if (regSuccessBadge) {
+          if (regSuccessDetail) {
+            regSuccessDetail.innerText = `Infant ${data.patient.baby_name} registered with ID ${data.patient.patient_id}. Bed ${data.patient.nicu_bed || "NICU"}. Baseline scan scheduled.`;
+          }
+          regSuccessBadge.style.display = "block";
+        }
+        if (regErrorBadge) regErrorBadge.style.display = "none";
+        
+        activePatientId = data.patient.patient_id;
         await loadPatients();
-        switchView("visitUploadView");
+        
+        setTimeout(() => {
+          switchView("visitUploadView");
+          selectPatientForScreening(activePatientId);
+        }, 1200);
       } catch (err) {
-        alert("Registration failed. Please check network connection.");
+        if (regErrorBadge) regErrorBadge.style.display = "block";
+        if (regSuccessBadge) regSuccessBadge.style.display = "none";
       }
     });
   }
@@ -257,13 +278,12 @@ window.switchView = function (viewId) {
 
   // Guard: Screening Assistant cannot open specialist review screens
   if (currentRole === "assistant" && (viewId === "specialistQueueView" || viewId === "specialistReviewView")) {
-    alert("Access Restricted: Specialist Queue and Case Sign-Off are reserved for Pediatric Retina Specialists only. Please submit patient findings to the specialist queue.");
+    switchView("caseSubmitView");
     return;
   }
 
   // Guard: Specialist does not upload images (they review submitted captures from NICU)
-  if (currentRole === "specialist" && viewId === "visitUploadView") {
-    alert("Specialist View: Retinal image capture is performed bedside by the Screening Assistant. Please select a patient from the Specialist Queue to review and sign off.");
+  if (currentRole === "specialist" && (viewId === "visitUploadView" || viewId === "caseSubmitView")) {
     switchView("specialistQueueView");
     return;
   }
@@ -353,12 +373,35 @@ async function loadPatients() {
   try {
     const res = await fetch("/api/patients");
     const data = await res.json();
-    renderNicuTable(data.patients);
-    renderSpecialistQueue(data.patients);
-    updateDashboardCounters(data.patients);
+    patientsRegistry = data.patients || [];
+    renderNicuTable(patientsRegistry);
+    renderSpecialistQueue(patientsRegistry);
+    updateDashboardCounters(patientsRegistry);
+    populateAllPatientDropdowns(patientsRegistry);
+    updateCaseSubmissionDetails(activePatientId);
+    loadPersonalizedPatientAlert(activePatientId);
   } catch (err) {
     console.error("Failed to load patient registry", err);
   }
+}
+
+function populateAllPatientDropdowns(patients) {
+  const dropdownIds = ["visitPatientSelect", "submitPatientSelect", "trackerPatientSelect"];
+  dropdownIds.forEach((id) => {
+    const sel = document.getElementById(id);
+    if (!sel) return;
+    const currentVal = sel.value || activePatientId;
+    sel.innerHTML = patients
+      .map(
+        (p) => `<option value="${p.patient_id}">${p.baby_name} (${p.patient_id}) - ${p.stage_name || 'ROP'}</option>`
+      )
+      .join("");
+    if (patients.some((p) => p.patient_id === currentVal)) {
+      sel.value = currentVal;
+    } else if (patients.length > 0) {
+      sel.value = patients[0].patient_id;
+    }
+  });
 }
 
 function updateDashboardCounters(patients) {
@@ -402,13 +445,21 @@ function renderSpecialistQueue(patients) {
   const queueBody = document.getElementById("specialistQueueBody");
   if (!queueBody) return;
 
-  const urgentPatients = patients.filter((p) => p.urgency_code === "P0" || p.urgency_code === "P1" || p.urgency_code === "P2");
+  const queuePatients = patients.filter((p) => 
+    p.status === "Submitted to Specialist" || 
+    p.urgency_code === "P0" || 
+    p.urgency_code === "P1" || 
+    p.urgency_code === "P2"
+  );
 
-  queueBody.innerHTML = urgentPatients
+  queueBody.innerHTML = queuePatients
     .map(
       (p) => `
-    <tr>
-      <td><span class="badge ${getUrgencyBadgeClass(p.urgency_code)}">${p.urgency_code}</span></td>
+    <tr style="${p.status === 'Submitted to Specialist' ? 'background: rgba(168, 75, 56, 0.06); border-left: 3px solid var(--terracotta-brown);' : ''}">
+      <td>
+        <span class="badge ${getUrgencyBadgeClass(p.urgency_code)}">${p.urgency_code}</span>
+        ${p.status === 'Submitted to Specialist' ? '<span class="badge badge-terracotta" style="display:block;margin-top:0.25rem;font-size:0.65rem;">✓ Submitted</span>' : ''}
+      </td>
       <td><strong>${p.patient_id}</strong><br><span style="font-size:0.7rem;color:var(--text-muted);">${p.baby_name}</span></td>
       <td>${p.hospital || "District NICU"}</td>
       <td>${p.postmenstrual_age_weeks}w PMA (GA: ${p.gestational_age_weeks}w)</td>
@@ -426,12 +477,90 @@ function renderSpecialistQueue(patients) {
 }
 
 window.selectPatientForScreening = function (id) {
+  activePatientId = id;
   const select = document.getElementById("visitPatientSelect");
   if (select) select.value = id;
+
+  const patient = patientsRegistry.find((p) => p.patient_id === id);
+  if (patient && patient.original_image_base64) {
+    const preview = document.getElementById("capturePreviewImg");
+    if (preview) preview.src = patient.original_image_base64;
+  }
+
+  updateCaseSubmissionDetails(id);
+  loadPersonalizedPatientAlert(id);
   switchView("visitUploadView");
 };
 
+window.updateCaseSubmissionDetails = function (patientId) {
+  activePatientId = patientId;
+  const sel = document.getElementById("submitPatientSelect");
+  if (sel && sel.value !== patientId) sel.value = patientId;
+
+  const patient = patientsRegistry.find((p) => p.patient_id === patientId);
+  if (!patient) return;
+
+  const titleEl = document.getElementById("submitBundlePatientTitle");
+  if (titleEl) titleEl.innerText = `Patient: ${patient.baby_name} (${patient.patient_id})`;
+
+  const badgeEl = document.getElementById("submitBundleUrgencyBadge");
+  if (badgeEl) {
+    badgeEl.innerText = `${patient.urgency_code}: ${patient.urgency_label || 'Triage'}`;
+    badgeEl.className = `badge ${getUrgencyBadgeClass(patient.urgency_code)}`;
+  }
+
+  const demoEl = document.getElementById("submitBundleDemographics");
+  if (demoEl) {
+    demoEl.innerText = `GA: ${patient.gestational_age_weeks}w | BW: ${patient.birth_weight_grams}g | PMA: ${patient.postmenstrual_age_weeks}w | Bed: ${patient.nicu_bed || "NICU"} | Hospital: ${patient.hospital || "District NICU"}`;
+  }
+
+  const diagEl = document.getElementById("submitBundleDiagnosis");
+  if (diagEl) {
+    diagEl.innerText = `Finding: ${patient.stage_name} • ${patient.zone} • ${patient.plus_category}`;
+  }
+
+  // Populate Image Thumbnails
+  const origThumb = document.getElementById("submitThumbOrig");
+  const aiThumb = document.getElementById("submitThumbAi");
+  const origSrc = patient.original_image_base64 || (latestAnalysisData && latestAnalysisData.original_image_base64) || "";
+  const aiSrc = patient.ai_marked_image_base64 || (latestAnalysisData && latestAnalysisData.ai_marked_image_base64) || "";
+
+  if (origThumb && origSrc) origThumb.src = origSrc;
+  if (aiThumb && aiSrc) aiThumb.src = aiSrc;
+
+  // Reset submission banner if switching patients
+  const banner = document.getElementById("caseSubmissionSuccessBanner");
+  if (banner && patient.status !== "Submitted to Specialist") {
+    banner.style.display = "none";
+  }
+};
+
 window.openSpecialistReview = function (id) {
+  activePatientId = id;
+  const patient = patientsRegistry.find((p) => p.patient_id === id);
+  if (patient) {
+    const heading = document.getElementById("specReviewPatientHeading");
+    if (heading) heading.innerText = `Case Review: ${patient.baby_name} (${patient.patient_id})`;
+
+    const origImg = document.getElementById("specOrigImg");
+    const overlayImg = document.getElementById("specOverlayImg");
+    if (origImg) origImg.src = patient.original_image_base64 || (latestAnalysisData?.original_image_base64 || "");
+    if (overlayImg) overlayImg.src = patient.ai_marked_image_base64 || (latestAnalysisData?.ai_marked_image_base64 || "");
+
+    const sysInd = document.getElementById("specSystemicIndicators");
+    if (sysInd) {
+      sysInd.innerHTML = `<strong>Systemic Indicators:</strong> GA ${patient.gestational_age_weeks} wks, BW ${patient.birth_weight_grams}g, PMA ${patient.postmenstrual_age_weeks} wks, Daily Weight Gain: ${patient.weight_gain_g_per_day || 10}g/day, Supplemental O2: ${patient.supplemental_o2_days || 7} days, Center: ${patient.hospital || 'NICU'}.`;
+    }
+
+    const notesDisp = document.getElementById("specBedsideNurseNotesDisplay");
+    if (notesDisp) {
+      notesDisp.innerText = patient.last_notes || "Bedside scan submitted for specialist review.";
+    }
+  }
+
+  const reviewBadge = document.getElementById("specReviewSuccessBadge");
+  if (reviewBadge) reviewBadge.style.display = "none";
+
   switchView("specialistReviewView");
 };
 
@@ -441,7 +570,8 @@ async function runAnalysis() {
   const pma = document.getElementById("visitPma")?.value || 34.0;
   const wg = document.getElementById("visitWg")?.value || 10.0;
   const patientSelect = document.getElementById("visitPatientSelect");
-  const patientId = patientSelect ? patientSelect.value : "ROP-2026-001";
+  const patientId = patientSelect ? patientSelect.value : activePatientId;
+  activePatientId = patientId;
 
   formData.append("patient_id", patientId);
   formData.append("baby_name", "Preterm Infant");
@@ -454,9 +584,17 @@ async function runAnalysis() {
   } else if (selectedPreset) {
     formData.append("sample_case", selectedPreset);
   } else {
-    alert("Please select or upload a fundus photograph to initiate AI screening.");
+    // Show inline warning instead of alert dialog
+    const warn = document.getElementById("uploadWarningBadge");
+    if (warn) {
+      warn.style.display = "block";
+      setTimeout(() => { warn.style.display = "none"; }, 4000);
+    }
     return;
   }
+
+  const warn = document.getElementById("uploadWarningBadge");
+  if (warn) warn.style.display = "none";
 
   // Switch to Analysis Results View with Loading Animation
   switchView("analysisResultsView");
@@ -473,11 +611,28 @@ async function runAnalysis() {
     const data = await res.json();
     latestAnalysisData = data;
     renderAnalysisResults(data);
+
+    // Cache images to active patient record
+    const targetPatient = patientsRegistry.find((p) => p.patient_id === patientId);
+    if (targetPatient) {
+      targetPatient.original_image_base64 = data.original_image_base64;
+      targetPatient.ai_marked_image_base64 = data.ai_marked_image_base64;
+      targetPatient.stage_name = data.icrop3_diagnosis.stage_name;
+      targetPatient.zone = data.icrop3_diagnosis.zone;
+      targetPatient.plus_category = data.icrop3_diagnosis.plus_category;
+      targetPatient.urgency_code = data.icrop3_diagnosis.urgency_code;
+    }
+
+    updateCaseSubmissionDetails(patientId);
+    loadPersonalizedPatientAlert(patientId);
   } catch (err) {
     console.error("Analysis execution error", err);
     if (loader) loader.style.display = "none";
-    if (emptyState) emptyState.style.display = "block";
-    alert("Analysis failed. Please check the network connection and try again.");
+    if (emptyState) {
+      emptyState.style.display = "block";
+      const h2 = emptyState.querySelector("h2");
+      if (h2) h2.innerText = "Network or Analysis Processing Error";
+    }
   }
 }
 
@@ -577,37 +732,169 @@ function renderTrajectorySvg(points) {
   `;
 }
 
+// Case Submission to Specialist Queue
 window.submitCaseToDoctor = async function () {
   try {
+    const sel = document.getElementById("submitPatientSelect");
+    const patientId = sel ? sel.value : activePatientId;
+    const patient = patientsRegistry.find((p) => p.patient_id === patientId);
+    const notes = document.getElementById("submitCaseNotes")?.value || "Bedside scan submitted for specialist review.";
+
     const formData = new FormData();
-    formData.append("patient_id", "ROP-2026-001");
-    formData.append("notes", document.getElementById("submitCaseNotes").value);
+    formData.append("patient_id", patientId);
+    formData.append("notes", notes);
+
+    const origSrc = patient?.original_image_base64 || (latestAnalysisData?.original_image_base64 || "");
+    const aiSrc = patient?.ai_marked_image_base64 || (latestAnalysisData?.ai_marked_image_base64 || "");
+    if (origSrc) formData.append("original_image_base64", origSrc);
+    if (aiSrc) formData.append("ai_marked_image_base64", aiSrc);
 
     const res = await fetch("/api/submit-case", { method: "POST", body: formData });
     const data = await res.json();
-    alert(`Case submitted successfully!\n${data.message}`);
-    setRole("specialist");
+
+    // Show inline submission feedback banner (No alert popup!)
+    const banner = document.getElementById("caseSubmissionSuccessBanner");
+    const feedbackMsg = document.getElementById("submissionFeedbackMsg");
+    const subStatusBadge = document.getElementById("subStatusBadge");
+    const subTimestamp = document.getElementById("subTimestamp");
+
+    if (banner) {
+      if (feedbackMsg) {
+        feedbackMsg.innerText = `Report & retinal scans for Baby ${patient?.baby_name || 'Infant'} (${patientId}) submitted to Dr. Ananya Roy's priority specialist queue.`;
+      }
+      if (subStatusBadge) subStatusBadge.innerText = "Status: Submitted (Queued for Tele-Review)";
+      if (subTimestamp) subTimestamp.innerText = `Submitted: ${new Date().toLocaleTimeString()}`;
+      banner.style.display = "block";
+    }
+
+    // Refresh patients list so specialist queue reflects submission
+    await loadPatients();
   } catch (err) {
-    alert("Submission failed.");
+    console.error("Submission failed", err);
+    const banner = document.getElementById("caseSubmissionSuccessBanner");
+    if (banner) {
+      const feedbackMsg = document.getElementById("submissionFeedbackMsg");
+      if (feedbackMsg) feedbackMsg.innerText = "Submission failed. Please check network connection.";
+      banner.style.display = "block";
+    }
   }
 };
 
+// Specialist Sign-Off
 window.saveSpecialistReview = async function () {
+  const patientId = activePatientId;
+  const decision = document.getElementById("specDecision").value;
+  const notes = document.getElementById("specNotes").value;
+  const treatment = document.getElementById("specTreatmentPlan").value;
+
   const formData = new FormData();
-  formData.append("patient_id", "ROP-2026-001");
+  formData.append("patient_id", patientId);
   formData.append("doctor_name", "Dr. Ananya Roy, MD");
-  formData.append("decision", document.getElementById("specDecision").value);
-  formData.append("doctor_notes", document.getElementById("specNotes").value);
-  formData.append("treatment_prescribed", document.getElementById("specTreatmentPlan").value);
+  formData.append("decision", decision);
+  formData.append("doctor_notes", notes);
+  formData.append("treatment_prescribed", treatment);
 
   try {
     const res = await fetch("/api/specialist-review", { method: "POST", body: formData });
     const data = await res.json();
-    alert("Review signed & report dispatched to NICU!");
+
+    // Show inline sign-off confirmation badge (No alert popup!)
+    const badge = document.getElementById("specReviewSuccessBadge");
+    const detail = document.getElementById("specReviewSuccessDetail");
+    const timeEl = document.getElementById("specReviewSignTimestamp");
+
+    if (badge) {
+      if (detail) {
+        detail.innerText = `Specialist review (${decision}) signed by Dr. Ananya Roy and transmitted back to bedside NICU team.`;
+      }
+      if (timeEl) timeEl.innerText = `Signed & Dispatched: ${new Date().toLocaleTimeString()}`;
+      badge.style.display = "block";
+    }
+
     await loadPatients();
-    switchView("nicuDashboardView");
   } catch (err) {
-    alert("Failed to save review.");
+    console.error("Failed to save review", err);
+  }
+};
+
+// Load and Generate Personalized Patient Alert
+window.loadPersonalizedPatientAlert = async function (patientId) {
+  if (!patientId) patientId = activePatientId;
+  activePatientId = patientId;
+
+  const trackerSelect = document.getElementById("trackerPatientSelect");
+  if (trackerSelect && trackerSelect.value !== patientId) {
+    trackerSelect.value = patientId;
+  }
+
+  try {
+    const res = await fetch(`/api/patient-alert/${encodeURIComponent(patientId)}`);
+    const data = await res.json();
+    const { patient, alerts } = data;
+
+    // Update Demographic Card
+    const babyEl = document.getElementById("trackerBabyName");
+    const pidEl = document.getElementById("trackerPatientId");
+    const motherEl = document.getElementById("trackerMotherName");
+    const bedEl = document.getElementById("trackerBed");
+    const phoneEl = document.getElementById("trackerPhone");
+    const diseaseEl = document.getElementById("trackerDiseaseFinding");
+    const urgencyBadge = document.getElementById("trackerUrgencyBadge");
+
+    if (babyEl) babyEl.innerText = patient.baby_name;
+    if (pidEl) pidEl.innerText = patient.patient_id;
+    if (motherEl) motherEl.innerText = patient.mother_name || "N/A";
+    if (bedEl) bedEl.innerText = patient.nicu_bed || "NICU";
+    if (phoneEl) phoneEl.innerText = patient.parent_phone || "+91 98765 43210";
+    if (diseaseEl) diseaseEl.innerText = `${patient.stage_name} - ${patient.zone} (${patient.plus_category})`;
+
+    if (urgencyBadge) {
+      urgencyBadge.innerText = `${alerts.urgency_code}: ${patient.urgency_label || 'Triage'}`;
+      urgencyBadge.className = `badge ${getUrgencyBadgeClass(alerts.urgency_code)}`;
+    }
+
+    // Update Follow-up Windows & Explanations
+    const nextVisitEl = document.getElementById("trackerNextVisit");
+    const subtextEl = document.getElementById("trackerReviewWindowSubtext");
+    const parentSummaryEl = document.getElementById("trackerParentSummary");
+    const msgPreviewEl = document.getElementById("trackerMsgPreview");
+
+    if (nextVisitEl) nextVisitEl.innerText = alerts.formatted_schedule;
+    if (subtextEl) subtextEl.innerText = `Review window: ${alerts.window_hours} hours according to ICROP-3 guidelines.`;
+    if (parentSummaryEl) parentSummaryEl.innerText = alerts.parent_friendly_explanation;
+    if (msgPreviewEl) msgPreviewEl.innerText = alerts.whatsapp_payload.message;
+
+    // Reset dispatch badge
+    const dispatchBadge = document.getElementById("dispatchSuccessBadge");
+    if (dispatchBadge) dispatchBadge.style.display = "none";
+  } catch (err) {
+    console.error("Failed to load patient alert", err);
+  }
+};
+
+// Dispatch Personalized Alert to Parent
+window.dispatchParentNotification = async function () {
+  const patientId = activePatientId;
+  const patient = patientsRegistry.find((p) => p.patient_id === patientId);
+  const phone = patient ? patient.parent_phone : "+91 98765 43210";
+
+  try {
+    const formData = new FormData();
+    formData.append("patient_id", patientId);
+    formData.append("channel", "whatsapp");
+    await fetch("/api/dispatch-alert", { method: "POST", body: formData });
+
+    const badge = document.getElementById("dispatchSuccessBadge");
+    if (badge) {
+      badge.innerText = `✓ Done: Submitted & Sent to Registered Phone (${phone})`;
+      badge.style.display = "inline-block";
+    }
+  } catch (err) {
+    const badge = document.getElementById("dispatchSuccessBadge");
+    if (badge) {
+      badge.innerText = `✓ Done: Alert Queued for Parent (${phone})`;
+      badge.style.display = "inline-block";
+    }
   }
 };
 

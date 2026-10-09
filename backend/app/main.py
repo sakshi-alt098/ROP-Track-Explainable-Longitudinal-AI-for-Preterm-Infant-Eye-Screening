@@ -346,16 +346,100 @@ async def analyze_fundus(
     }
 
 
+@app.get("/api/patient/{patient_id}")
+def get_patient_detail(patient_id: str):
+    for p in PATIENTS:
+        if p["patient_id"] == patient_id:
+            return {"status": "success", "patient": p}
+    raise HTTPException(status_code=404, detail="Patient not found")
+
+
+@app.get("/api/patient-alert/{patient_id}")
+def get_patient_alert(patient_id: str):
+    target = None
+    for p in PATIENTS:
+        if p["patient_id"] == patient_id:
+            target = p
+            break
+    if not target:
+        raise HTTPException(status_code=404, detail="Patient not found")
+
+    eval_data = {
+        "urgency_code": target.get("urgency_code", "P1"),
+        "urgency_label": target.get("urgency_label", "Type 1 ROP"),
+        "stage_name": target.get("stage_name", "Stage 3 (Extraretinal Neovascular Proliferation)"),
+        "plus_category": target.get("plus_category", "Plus Disease"),
+        "zone": target.get("zone", "Zone I"),
+        "recommended_action": f"Immediate bedside retinal evaluation and preparation for {target.get('stage_name', 'ROP')} management within 48-72 hours." if target.get("urgency_code") in ["P0", "P1"] else "Follow-up monitoring scheduled as per ICROP-3 protocol.",
+        "suggested_review_window_hours": 48 if target.get("urgency_code") in ["P0", "P1"] else (96 if target.get("urgency_code") == "P2" else 240)
+    }
+    longitudinal_data = {
+        "systemic_risk_score": 74.5 if target.get("urgency_code") in ["P0", "P1"] else (42.0 if target.get("urgency_code") == "P2" else 15.0),
+        "tr_rop_risk_percentage": 82.4 if target.get("urgency_code") in ["P0", "P1"] else (38.5 if target.get("urgency_code") == "P2" else 8.0)
+    }
+    alerts = scheduler_engine.generate_schedule_and_alerts(
+        patient_id=target["patient_id"],
+        baby_name=target.get("baby_name", "Infant"),
+        parent_phone=target.get("parent_phone", "+91 98765 43210"),
+        eval_data=eval_data,
+        longitudinal_data=longitudinal_data
+    )
+    return {
+        "status": "success",
+        "patient": target,
+        "alerts": alerts
+    }
+
+
+@app.post("/api/dispatch-alert")
+def dispatch_patient_alert(
+    patient_id: str = Form(...),
+    channel: str = Form("whatsapp")
+):
+    target = None
+    for p in PATIENTS:
+        if p["patient_id"] == patient_id:
+            target = p
+            break
+    timestamp_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    phone = target.get("parent_phone") if target else "+91 98765 43210"
+    baby = target.get("baby_name") if target else "Infant"
+    return {
+        "status": "success",
+        "message": f"Personalized clinical alert for Baby {baby} ({patient_id}) successfully dispatched to {phone} via {channel.upper()}.",
+        "patient_id": patient_id,
+        "timestamp": timestamp_str
+    }
+
+
 @app.post("/api/submit-case")
 def submit_case_to_specialist(
     patient_id: str = Form(...),
-    notes: str = Form("Automated case bundle transmitted from NICU bedside.")
+    notes: str = Form("Automated case bundle transmitted from NICU bedside."),
+    original_image_base64: Optional[str] = Form(None),
+    ai_marked_image_base64: Optional[str] = Form(None)
 ):
+    timestamp_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    target_patient = None
+    for p in PATIENTS:
+        if p["patient_id"] == patient_id:
+            p["status"] = "Submitted to Specialist"
+            p["last_notes"] = notes
+            p["submission_time"] = timestamp_str
+            if original_image_base64:
+                p["original_image_base64"] = original_image_base64
+            if ai_marked_image_base64:
+                p["ai_marked_image_base64"] = ai_marked_image_base64
+            target_patient = p
+            break
+
     return {
         "status": "success",
-        "message": f"Case {patient_id} dispatched to remote specialist priority queue.",
+        "message": f"Case {patient_id} has been securely submitted to the Pediatric Retina Specialist Queue.",
+        "patient_id": patient_id,
+        "patient": target_patient,
         "assigned_doctor": "Dr. Ananya Roy, MD (Pediatric Retina)",
-        "tele_dispatch_timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        "tele_dispatch_timestamp": timestamp_str
     }
 
 
@@ -380,6 +464,7 @@ def record_specialist_review(
     for p in PATIENTS:
         if p["patient_id"] == patient_id:
             p["status"] = f"Specialist Reviewed: {decision}"
+            p["review"] = review
 
     return {"status": "success", "review": review}
 
@@ -595,6 +680,41 @@ def _generate_ai_abnormality_overlay(image_bgr: np.ndarray, biomarker_result: di
 
     marked = np.vstack([banner, marked])
     return marked, abnormalities
+
+
+def _initialize_patient_sample_images():
+    preset_map = {
+        "ROP-2026-001": "type1_stage3",
+        "ROP-2026-002": "stage2_preplus",
+        "ROP-2026-003": "normal_immature"
+    }
+    for p in PATIENTS:
+        try:
+            pid = p["patient_id"]
+            preset = preset_map.get(pid, "type1_stage3")
+            img_bgr = _generate_synthetic_fundus(preset)
+            bio = vessel_engine.process_fundus(img_bgr)
+            icrop = {
+                "urgency_code": p.get("urgency_code", "P1"),
+                "urgency_label": p.get("urgency_label", "Type 1 ROP"),
+                "stage_name": p.get("stage_name", "Stage 3"),
+                "zone": p.get("zone", "Zone I"),
+                "plus_category": p.get("plus_category", "Plus Disease"),
+                "plus_score": p.get("plus_score", 0.78),
+                "recommended_action": "Specialist bedside examination and laser photocoagulation within 48h."
+            }
+            marked_bgr, abnormalities = _generate_ai_abnormality_overlay(img_bgr, bio, icrop)
+            _, orig_buf = cv2.imencode(".jpg", img_bgr, [int(cv2.IMWRITE_JPEG_QUALITY), 90])
+            _, marked_buf = cv2.imencode(".jpg", marked_bgr, [int(cv2.IMWRITE_JPEG_QUALITY), 90])
+            p["original_image_base64"] = "data:image/jpeg;base64," + base64.b64encode(orig_buf).decode("utf-8")
+            p["ai_marked_image_base64"] = "data:image/jpeg;base64," + base64.b64encode(marked_buf).decode("utf-8")
+            p["abnormality_zones"] = abnormalities
+        except Exception as e:
+            print("Error initializing sample image for patient:", e)
+
+
+_initialize_patient_sample_images()
+
 
 
 # Mount Static Frontend

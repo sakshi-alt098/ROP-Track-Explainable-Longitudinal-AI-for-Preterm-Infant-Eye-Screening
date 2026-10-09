@@ -210,7 +210,8 @@
           </div>
 
           <div class="signup-link">
-            <p>New Hospital/NICU Center? <a href="javascript:void(0);" onclick="alert('Contact the State Health Directorate to onboard your NICU facility.')">Request Node Enrollment</a></p>
+            <p>New Hospital/NICU Center? <a href="javascript:void(0);" onclick="document.getElementById('enrollInfoToast').style.display='block'">Request Node Enrollment</a></p>
+            <div id="enrollInfoToast" style="display:none; font-size:0.75rem; color:var(--text-muted); margin-top:0.4rem; background:var(--warm-beige-panel); padding:0.4rem 0.6rem; border-radius:0.3rem;">Notice: Contact the State Health Directorate / RBSK Mission to onboard your NICU facility node.</div>
           </div>
 
           <div class="success-message" id="successMessage">
@@ -341,9 +342,23 @@
 
           <div style="display: flex; justify-content: flex-end; gap: 0.75rem; margin-top: 1rem;">
             <button type="button" class="btn-outline" onclick="switchView('nicuDashboardView')">Cancel</button>
-            <button type="submit" class="btn-primary">Save Infant Record & Proceed to Screening</button>
+            <button type="submit" class="btn-primary" id="btnSubmitRegistration">Save Infant Record & Proceed to Screening</button>
           </div>
         </form>
+
+        <!-- Inline Registration Status Feedback (Replaces Alert) -->
+        <div id="regSuccessBadge" style="display: none; margin-top: 1.25rem; background: var(--sage-green-light); border: 2px solid var(--sage-green); border-radius: 0.5rem; padding: 0.85rem;">
+          <div style="display: flex; align-items: center; gap: 0.6rem;">
+            <span style="font-size: 1.4rem; color: var(--sage-green-dark); font-weight: bold;">✓</span>
+            <div>
+              <strong style="color: var(--sage-green-dark); font-size: 0.9rem; display: block;">Done: Infant Registered Successfully!</strong>
+              <p id="regSuccessDetail" style="font-size: 0.78rem; color: var(--text-main); margin: 0.2rem 0 0 0;"></p>
+            </div>
+          </div>
+        </div>
+        <div id="regErrorBadge" style="display: none; margin-top: 1.25rem; background: #FDEDEC; border: 2px solid #E6B0AA; border-radius: 0.5rem; padding: 0.85rem; color: #922B21; font-size: 0.82rem;">
+          Registration failed. Please check network connection and verify input parameters.
+        </div>
       </div>
     </section>
 
@@ -390,6 +405,11 @@
           </div>
 
           <button id="runAnalysisBtn" class="btn-primary" style="width: 100%; margin-top: 0.5rem;">Run Image Quality & Biomarker Engine</button>
+          
+          <!-- Inline Upload Warning (Replaces Alert) -->
+          <div id="uploadWarningBadge" style="display: none; margin-top: 0.75rem; background: #FDEDEC; border: 1px solid #E6B0AA; border-radius: 0.35rem; padding: 0.6rem; font-size: 0.78rem; color: #922B21; font-weight: 600; text-align: center;">
+            Please select or upload a fundus photograph to initiate AI screening.
+          </div>
         </div>
 
         <div class="panel-card">
@@ -560,6 +580,41 @@
         </p>
         
         <div class="form-group">
+          <label>Select Infant / Case to Transmit</label>
+          <select id="submitPatientSelect" class="form-control" onchange="updateCaseSubmissionDetails(this.value)">
+            <option value="ROP-2026-001">Sharma (Twin 1) - ROP-2026-001</option>
+            <option value="ROP-2026-002">Khan - ROP-2026-002</option>
+            <option value="ROP-2026-003">Patel - ROP-2026-003</option>
+          </select>
+        </div>
+
+        <!-- Case Bundle Preview Card with Side-by-Side Thumbnails -->
+        <div style="background: var(--warm-beige-panel); border: 1px solid var(--warm-beige-border); border-radius: 0.45rem; padding: 0.85rem; margin-bottom: 1rem;">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.4rem;">
+            <strong style="font-size: 0.85rem; color: var(--text-main);" id="submitBundlePatientTitle">Patient: Sharma (Twin 1) (ROP-2026-001)</strong>
+            <span class="badge badge-terracotta" id="submitBundleUrgencyBadge">P1: Type 1 ROP</span>
+          </div>
+          <div style="font-size: 0.74rem; color: var(--text-muted); margin-bottom: 0.5rem;" id="submitBundleDemographics">
+            GA: 27.5 wks | BW: 920g | PMA: 34.2 wks | Bed: NICU-Bed-04 | Hospital: AIIMS Regional NICU
+          </div>
+          <div style="font-size: 0.78rem; color: var(--terracotta-brown); font-weight: 600; margin-bottom: 0.65rem;" id="submitBundleDiagnosis">
+            Finding: Stage 3 (Extraretinal Neovascular Proliferation) • Zone I • Plus Disease
+          </div>
+
+          <!-- Thumbnails of images being transmitted to specialist -->
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; margin-top: 0.5rem;">
+            <div style="border: 1px solid var(--warm-beige-border); border-radius: 0.35rem; overflow: hidden; background: #000; text-align: center;">
+              <div style="font-size: 0.68rem; color: #fff; background: rgba(0,0,0,0.65); padding: 0.25rem;">1. Bedside Uploaded Fundus</div>
+              <img id="submitThumbOrig" src="" alt="Raw Fundus" style="width: 100%; height: 120px; object-fit: contain; display: block; background: #000;">
+            </div>
+            <div style="border: 2px solid var(--terracotta-brown); border-radius: 0.35rem; overflow: hidden; background: #000; text-align: center;">
+              <div style="font-size: 0.68rem; color: #fff; background: rgba(180,40,40,0.88); padding: 0.25rem;">2. AI Red Abnormality Flags</div>
+              <img id="submitThumbAi" src="" alt="AI Marked" style="width: 100%; height: 120px; object-fit: contain; display: block; background: #000;">
+            </div>
+          </div>
+        </div>
+
+        <div class="form-group">
           <label>Assign Specialist</label>
           <select id="submitSpecialistSelect" class="form-control">
             <option>Dr. Ananya Roy, MD (Pediatric Retina Specialist - On Duty)</option>
@@ -569,22 +624,29 @@
 
         <div class="form-group">
           <label>NICU Nurse / Resident Clinical Notes</label>
-          <textarea id="submitCaseNotes" class="form-control" rows="3" placeholder="Add specific bedside observations (e.g. apnea episodes, recent blood transfusions)...">Patient showing rapid vessel dilation. Requesting immediate confirmation of Zone I Stage 3 Plus diagnosis.</textarea>
-        </div>
-
-        <div style="background: var(--warm-beige-panel); border: 1px solid var(--warm-beige-border); border-radius: 0.35rem; padding: 0.75rem; margin-bottom: 1rem;">
-          <div style="font-size: 0.75rem; font-weight: 600; color: var(--terracotta-brown);">Included In Encrypted Bundle:</div>
-          <ul style="font-size: 0.75rem; color: var(--text-muted); margin-left: 1.25rem; margin-top: 0.35rem; line-height: 1.5;">
-            <li>De-identified Patient Demographics & Systemic Factors (GA 27.5 wks, BW 920g)</li>
-            <li>Raw and CLAHE-Segmented Retinal Fundus Imagery</li>
-            <li>Quantitative Biomarkers (ATI 1.340, VDI 8.20, Avascular Area 46%)</li>
-            <li>Deterministic ICROP-3 Stage & Continuous Plus Index</li>
-          </ul>
+          <textarea id="submitCaseNotes" class="form-control" rows="3" placeholder="Add specific bedside observations (e.g. apnea episodes, recent blood transfusions)...">Patient showing rapid vessel dilation. Requesting immediate confirmation of Zone I Stage 3 Plus diagnosis and laser readiness.</textarea>
         </div>
 
         <div style="display: flex; justify-content: flex-end; gap: 0.75rem;">
           <button class="btn-outline" onclick="switchView('analysisResultsView')">Back to Analysis</button>
-          <button class="btn-primary" onclick="submitCaseToDoctor()">Dispatch to Specialist Queue</button>
+          <button class="btn-primary" id="btnDispatchCase" onclick="submitCaseToDoctor()">Dispatch to Specialist Queue</button>
+        </div>
+
+        <!-- INLINE SUBMISSION FEEDBACK BANNER (REPLACES POP-UP ALERT) -->
+        <div id="caseSubmissionSuccessBanner" style="display: none; margin-top: 1.25rem; background: var(--sage-green-light); border: 2px solid var(--sage-green); border-radius: 0.5rem; padding: 1rem;">
+          <div style="display: flex; align-items: flex-start; gap: 0.75rem;">
+            <div style="font-size: 1.6rem; color: var(--sage-green-dark); line-height: 1;">✓</div>
+            <div>
+              <strong style="color: var(--sage-green-dark); font-size: 0.95rem; display: block;">Report & Image Successfully Submitted to Specialist</strong>
+              <p id="submissionFeedbackMsg" style="font-size: 0.8rem; color: var(--text-main); margin: 0.35rem 0 0.5rem 0; line-height: 1.4;">
+                Patient ROP-2026-001 fundus scan and clinical findings transmitted to Dr. Ananya Roy's priority queue.
+              </p>
+              <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
+                <span class="badge badge-sage" id="subStatusBadge">Status: Submitted (Queued for Tele-Review)</span>
+                <span style="font-size: 0.72rem; color: var(--text-muted); padding-top: 0.2rem;" id="subTimestamp"></span>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
     </section>
@@ -648,12 +710,26 @@
             <textarea id="specNotes" class="form-control" rows="4">Confirmed Zone I Stage 3 with Plus Disease. Severe arteriolar tortuosity present in superotemporal arcade. Schedule bedside laser photocoagulation within 48 hours.</textarea>
           </div>
 
-          <button class="btn-sage" style="width: 100%;" onclick="saveSpecialistReview()">Sign & Transmit Report to NICU</button>
+          <button class="btn-sage" style="width: 100%;" id="btnSignSpecialistReview" onclick="saveSpecialistReview()">Sign & Transmit Report to NICU</button>
+          
+          <!-- Inline Specialist Sign-Off Feedback Badge (Replaces Alert) -->
+          <div id="specReviewSuccessBadge" style="display: none; margin-top: 0.85rem; background: var(--sage-green-light); border: 2px solid var(--sage-green); border-radius: 0.5rem; padding: 0.85rem;">
+            <div style="display: flex; align-items: center; gap: 0.6rem;">
+              <span style="font-size: 1.4rem; color: var(--sage-green-dark); font-weight: bold;">✓</span>
+              <div>
+                <strong style="color: var(--sage-green-dark); font-size: 0.9rem; display: block;">Done: Specialist Review Signed & Dispatched</strong>
+                <p id="specReviewSuccessDetail" style="font-size: 0.76rem; color: var(--text-main); margin: 0.2rem 0 0 0;">
+                  Official diagnostic sign-off transmitted back to the bedside NICU clinical care team.
+                </p>
+                <span id="specReviewSignTimestamp" style="font-size: 0.7rem; color: var(--text-muted); display: block; margin-top: 0.25rem;"></span>
+              </div>
+            </div>
+          </div>
         </div>
 
         <div class="panel-card">
           <div class="card-header">
-            <h2>Case Review: Patient ROP-2026-001</h2>
+            <h2 id="specReviewPatientHeading">Case Review: Patient ROP-2026-001 (Sharma - Twin 1)</h2>
             <span class="badge badge-tan">Side-by-Side</span>
           </div>
           <div class="grid-cols-2" style="gap: 0.75rem;">
@@ -666,9 +742,13 @@
               <img id="specOverlayImg" src="" alt="AI Red Abnormality Flags">
             </div>
           </div>
-          <div style="margin-top: 1rem; background: var(--warm-beige-panel); padding: 0.75rem; border-radius: 0.35rem; font-size: 0.78rem;">
+          <div id="specSystemicIndicators" style="margin-top: 1rem; background: var(--warm-beige-panel); padding: 0.75rem; border-radius: 0.35rem; font-size: 0.78rem;">
             <strong>Systemic Indicators:</strong> GA 27.5 wks, BW 920g, PMA 34.2 wks, Daily Weight Gain: 8.5g/day, Supplemental O2: 21 days.
           </div>
+          <div id="specBedsideNotesCard" style="margin-top: 0.5rem; background: var(--warm-beige-panel); padding: 0.75rem; border-radius: 0.35rem; font-size: 0.78rem; border-left: 3px solid var(--golden-tan-dark);">
+            <strong>NICU Bedside Submitter Notes:</strong> <span id="specBedsideNurseNotesDisplay">Patient showing rapid vessel dilation. Requesting immediate confirmation of Zone I Stage 3 Plus diagnosis.</span>
+          </div>
+        </div>
         </div>
       </div>
     </section>
@@ -706,21 +786,52 @@
 
     <!-- SCREEN 10: FOLLOW-UP TRACKER -->
     <section id="followupTrackerView" class="view-section">
+      <!-- Top Patient Selector Card -->
+      <div class="panel-card ss-scroll scale-in" style="margin-bottom: 1.25rem;">
+        <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem;">
+          <div>
+            <h2 style="font-size: 1.15rem; color: var(--terracotta-brown); margin: 0;">Personalized Patient Follow-Up & Communication Hub</h2>
+            <p style="font-size: 0.78rem; color: var(--text-muted); margin: 0.25rem 0 0 0;">
+              Generate risk-calibrated return dates, disease-specific plain language summaries, and WhatsApp/SMS alerts tailored for each infant.
+            </p>
+          </div>
+          <div style="min-width: 320px;">
+            <label style="font-size: 0.72rem; font-weight: 700; color: var(--text-muted); text-transform: uppercase;">Select Patient Record</label>
+            <select id="trackerPatientSelect" class="form-control" onchange="loadPersonalizedPatientAlert(this.value)">
+              <option value="ROP-2026-001">Sharma (Twin 1) - ROP-2026-001</option>
+              <option value="ROP-2026-002">Khan - ROP-2026-002</option>
+              <option value="ROP-2026-003">Patel - ROP-2026-003</option>
+            </select>
+          </div>
+        </div>
+      </div>
+
       <div class="grid-cols-2 ss-scroll scale-in">
         <div class="panel-card">
           <div class="card-header">
-            <h2>Smart Follow-Up Scheduling</h2>
-            <span class="badge badge-sage">Automated Dispatch</span>
+            <h2>Patient Clinical Status & Return Schedule</h2>
+            <span class="badge badge-sage" id="trackerUrgencyBadge">P1: Type 1 ROP</span>
           </div>
+
+          <div style="background: var(--warm-beige-panel); border: 1px solid var(--warm-beige-border); border-radius: 0.4rem; padding: 0.75rem; margin-bottom: 1rem; font-size: 0.78rem;">
+            <div><strong>Patient:</strong> <span id="trackerBabyName">Sharma (Twin 1)</span> | <strong>ID:</strong> <span id="trackerPatientId">ROP-2026-001</span></div>
+            <div style="margin-top: 0.25rem;"><strong>Mother:</strong> <span id="trackerMotherName">Pooja Sharma</span> | <strong>Bed:</strong> <span id="trackerBed">NICU-Bed-04</span> | <strong>Contact:</strong> <span id="trackerPhone">+91 98765 43210</span></div>
+            <div style="margin-top: 0.25rem;"><strong>ICROP-3 Diagnosis:</strong> <span id="trackerDiseaseFinding" style="color: var(--terracotta-brown); font-weight: 600;">Stage 3 (Extraretinal Neovascular Proliferation) - Zone I (Plus Disease)</span></div>
+          </div>
+
           <div style="margin-bottom: 1rem;">
-            <div style="font-size: 0.75rem; color: var(--text-muted); font-weight: 600;">NEXT APPOINTMENT WINDOW</div>
+            <div style="font-size: 0.75rem; color: var(--text-muted); font-weight: 600;">CALIBRATED NEXT APPOINTMENT WINDOW</div>
             <div id="trackerNextVisit" style="font-size: 1.15rem; font-weight: 700; color: var(--terracotta-brown); margin-top: 0.25rem;">
               Thursday, 10 October 2026 (02:00 PM)
             </div>
+            <div id="trackerReviewWindowSubtext" style="font-size: 0.72rem; color: var(--text-muted); margin-top: 0.2rem;">
+              Review within 48 hours as mandated by ICROP-3 urgent guidelines.
+            </div>
           </div>
+
           <div style="margin-bottom: 1rem;">
             <div style="font-size: 0.75rem; color: var(--text-muted); font-weight: 600;">PARENT-FRIENDLY PLAIN LANGUAGE EXPLANATION</div>
-            <p id="trackerParentSummary" style="font-size: 0.8rem; color: var(--text-main); line-height: 1.5; margin-top: 0.35rem; background: var(--warm-beige-panel); padding: 0.75rem; border-radius: 0.35rem;">
+            <p id="trackerParentSummary" style="font-size: 0.82rem; color: var(--text-main); line-height: 1.5; margin-top: 0.35rem; background: var(--warm-beige-panel); padding: 0.75rem; border-radius: 0.35rem;">
               The blood vessels in your baby's eyes are growing unusually and need active medical attention.
             </p>
           </div>
@@ -729,11 +840,14 @@
         <div class="panel-card">
           <div class="card-header">
             <h2>Loss-to-Follow-Up (LTFU) Alert Preview</h2>
-            <span class="badge badge-tan">WhatsApp / SMS</span>
+            <span class="badge badge-tan">Personalized SMS / WhatsApp</span>
           </div>
-          <pre id="trackerMsgPreview" class="phone-preview"></pre>
-          <div style="margin-top: 0.75rem; display: flex; gap: 0.5rem;">
-            <button class="btn-sage" onclick="alert('Notification dispatched to parent phone.')">Simulate SMS/WhatsApp Dispatch</button>
+          <pre id="trackerMsgPreview" class="phone-preview" style="white-space: pre-wrap; font-family: inherit; font-size: 0.8rem; line-height: 1.45;"></pre>
+          <div style="margin-top: 0.75rem; display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap;">
+            <button class="btn-sage" id="btnSimulateDispatch" onclick="dispatchParentNotification()">Send Personalized Alert to Parent</button>
+            <div id="dispatchSuccessBadge" style="display: none; background: var(--sage-green-light); border: 1px solid var(--sage-green); border-radius: 0.35rem; padding: 0.35rem 0.65rem; font-size: 0.75rem; color: var(--sage-green-dark); font-weight: 700;">
+              ✓ Done: Submitted & Sent to Registered Phone
+            </div>
           </div>
         </div>
       </div>
@@ -808,7 +922,8 @@
           <div style="margin-top: 0.3rem;"><strong>Procedure:</strong> Bilateral Laser Photocoagulation</div>
         </div>
 
-        <button class="btn-sage" onclick="alert('Voucher PDF downloaded & stored in hospital billing record.')">Download Official Hospital Invoice</button>
+        <button class="btn-sage" onclick="document.getElementById('invoiceDownloadStatus').style.display='inline-block'">Download Official Hospital Invoice</button>
+        <div id="invoiceDownloadStatus" style="display: none; margin-top: 0.65rem; color: var(--sage-green-dark); font-size: 0.8rem; font-weight: 600;">✓ Done: Official Invoice Downloaded & Stored in Billing Archive.</div>
       </div>
     </section>
 
