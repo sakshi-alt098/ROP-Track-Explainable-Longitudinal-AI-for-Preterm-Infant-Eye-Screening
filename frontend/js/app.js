@@ -304,6 +304,8 @@ window.switchView = function (viewId) {
         scanLine.offsetHeight;
         scanLine.style.animation = "scanBottomTopBottom 3.2s cubic-bezier(0.4, 0, 0.2, 1) forwards";
       }
+    if (viewId === "paymentView") {
+      updatePaymentVoucherView(activePatientId);
     }
   }
 
@@ -386,7 +388,7 @@ async function loadPatients() {
 }
 
 function populateAllPatientDropdowns(patients) {
-  const dropdownIds = ["visitPatientSelect", "submitPatientSelect", "trackerPatientSelect"];
+  const dropdownIds = ["visitPatientSelect", "submitPatientSelect", "trackerPatientSelect", "voucherPatientSelect"];
   dropdownIds.forEach((id) => {
     const sel = document.getElementById(id);
     if (!sel) return;
@@ -406,8 +408,9 @@ function populateAllPatientDropdowns(patients) {
     }
   });
 
-  // Keep upload card updated with current patient
+  // Keep upload card and voucher card updated with current patient
   onVisitPatientChange(activePatientId);
+  updatePaymentVoucherView(activePatientId);
 }
 
 function updateDashboardCounters(patients) {
@@ -524,6 +527,7 @@ window.onVisitPatientChange = function (patientId) {
   if (preview) {
     preview.src = p.original_image_base64 || "";
   }
+  updatePaymentVoucherView(patientId);
 };
 
 window.selectPatientForScreening = function (id) {
@@ -533,6 +537,7 @@ window.selectPatientForScreening = function (id) {
 
   onVisitPatientChange(id);
   updateCaseSubmissionDetails(id);
+  updatePaymentVoucherView(id);
   loadPersonalizedPatientAlert(id);
   switchView("visitUploadView");
 };
@@ -1025,3 +1030,376 @@ function getUrgencyBadgeClass(code) {
   if (code === "P2") return "badge-tan";
   return "badge-sage";
 }
+
+window.updatePaymentVoucherView = function (patientId) {
+  if (patientId) activePatientId = patientId;
+  const sel = document.getElementById("voucherPatientSelect");
+  if (sel && sel.value !== activePatientId) sel.value = activePatientId;
+
+  const patient = patientsRegistry.find((p) => p.patient_id === activePatientId) || patientsRegistry[0];
+  if (!patient) return;
+
+  const bNameEl = document.getElementById("voucherBeneficiaryName");
+  const pIdEl = document.getElementById("voucherPatientId");
+  const mNameEl = document.getElementById("voucherMotherName");
+  const bedEl = document.getElementById("voucherBed");
+  const hospEl = document.getElementById("voucherHospital");
+  const vIdEl = document.getElementById("voucherId");
+  const clinEl = document.getElementById("voucherClinicalFinding");
+  const procEl = document.getElementById("voucherProcedure");
+
+  if (bNameEl) bNameEl.innerText = `Baby ${patient.baby_name}`;
+  if (pIdEl) pIdEl.innerText = patient.patient_id;
+  if (mNameEl) mNameEl.innerText = patient.mother_name || "N/A";
+  if (bedEl) bedEl.innerText = patient.nicu_bed || "NICU Bed #02";
+  if (hospEl) hospEl.innerText = patient.hospital || "District SNCU & AIIMS Tele-ROP Center";
+
+  const numPart = (patient.patient_id || "").replace(/\D/g, "") || "001";
+  if (vIdEl) vIdEl.innerText = `TXN-RBSK-2026-${numPart.padStart(3, "0")}`;
+
+  const findingText = patient.stage_name
+    ? `${patient.stage_name}, ${patient.zone || "Zone II"}, ${patient.plus_category || "Plus Disease"}`
+    : "Retinopathy Assessment in Progress";
+  if (clinEl) clinEl.innerText = findingText;
+
+  const procText = (patient.urgency_code === "P0" || patient.urgency_code === "P1")
+    ? "Bilateral Diode Laser Photocoagulation / Intravitreal Anti-VEGF"
+    : "Bilateral Retinopathy Surveillance & Bedside Tele-Ophthalmology";
+  if (procEl) procEl.innerText = procText;
+};
+
+window.downloadFinancialVoucherInvoiceImage = function () {
+  const patient = patientsRegistry.find((p) => p.patient_id === activePatientId) || patientsRegistry[0] || {
+    patient_id: "ROP-2026-001",
+    baby_name: "Sharma (Twin 1)",
+    mother_name: "Pooja Sharma",
+    nicu_bed: "NICU Bed #04",
+    hospital: "District SNCU & AIIMS Tele-ROP Center",
+    gestational_age_weeks: 28.2,
+    birth_weight_grams: 1020,
+    postmenstrual_age_weeks: 33.6,
+    stage_name: "Stage 2 (Intraretinal Ridge)",
+    zone: "Zone II",
+    plus_category: "Plus Disease",
+    urgency_code: "P1",
+    urgency_label: "High Urgency"
+  };
+
+  const statusEl = document.getElementById("invoiceDownloadStatus");
+  if (statusEl) {
+    statusEl.style.display = "block";
+    statusEl.innerHTML = `⏳ <span>Rendering Official Financial Clearance & Voucher Image...</span>`;
+  }
+
+  // Create high-res canvas (1200 x 1650)
+  const canvas = document.createElement("canvas");
+  canvas.width = 1200;
+  canvas.height = 1650;
+  const ctx = canvas.getContext("2d");
+
+  // Background
+  ctx.fillStyle = "#FAF8F5";
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+  // Outer Double Borders
+  ctx.strokeStyle = "#2F5233"; // deep sage green
+  ctx.lineWidth = 6;
+  ctx.strokeRect(28, 28, canvas.width - 56, canvas.height - 56);
+
+  ctx.strokeStyle = "#D4AF37"; // golden accent
+  ctx.lineWidth = 2;
+  ctx.strokeRect(38, 38, canvas.width - 76, canvas.height - 76);
+
+  // Watermark text in background
+  ctx.save();
+  ctx.translate(canvas.width / 2, canvas.height / 2);
+  ctx.rotate(-Math.PI / 6);
+  ctx.font = "bold 56px 'Segoe UI', Tahoma, sans-serif";
+  ctx.fillStyle = "rgba(47, 82, 51, 0.04)";
+  ctx.textAlign = "center";
+  ctx.fillText("GOVERNMENT OF INDIA • RBSK FINANCIAL CLEARANCE", 0, -40);
+  ctx.fillText("100% CASHLESS • ZERO OUT-OF-POCKET", 0, 40);
+  ctx.restore();
+
+  // Header Banner
+  ctx.fillStyle = "#2F5233";
+  ctx.fillRect(38, 38, canvas.width - 76, 170);
+
+  // Header Typography
+  ctx.fillStyle = "#E8F5E9";
+  ctx.font = "bold 22px 'Segoe UI', Tahoma, sans-serif";
+  ctx.textAlign = "center";
+  ctx.fillText("GOVERNMENT OF INDIA • NATIONAL HEALTH MISSION (NHM)", canvas.width / 2, 78);
+
+  ctx.fillStyle = "#FFFFFF";
+  ctx.font = "bold 28px 'Segoe UI', Tahoma, sans-serif";
+  ctx.fillText("RASHTRIYA BAL SWASTHYA KARYAKRAM (RBSK)", canvas.width / 2, 122);
+
+  ctx.fillStyle = "#F5D061";
+  ctx.font = "bold 25px 'Segoe UI', Tahoma, sans-serif";
+  ctx.fillText("OFFICIAL FINANCIAL CLEARANCE & TREATMENT VOUCHER", canvas.width / 2, 168);
+
+  // Subtitle Ribbon
+  ctx.fillStyle = "#EFECE6";
+  ctx.fillRect(38, 208, canvas.width - 76, 48);
+  ctx.fillStyle = "#4A3B32";
+  ctx.font = "italic 19px 'Segoe UI', Tahoma, sans-serif";
+  ctx.fillText("Zero Out-of-Pocket Hospital Billing Invoice & Entitlement Certificate", canvas.width / 2, 239);
+
+  // Metadata Box
+  const numPart = (patient.patient_id || "").replace(/\D/g, "") || "001";
+  const voucherId = `TXN-RBSK-2026-${numPart.padStart(3, "0")}`;
+  const todayStr = new Date().toLocaleDateString("en-IN", {
+    day: "numeric",
+    month: "long",
+    year: "numeric"
+  }) + ", " + new Date().toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" });
+
+  ctx.fillStyle = "#F2F5F2";
+  ctx.fillRect(60, 275, canvas.width - 120, 85);
+  ctx.strokeStyle = "#CAD5CA";
+  ctx.lineWidth = 1;
+  ctx.strokeRect(60, 275, canvas.width - 120, 85);
+
+  ctx.textAlign = "left";
+  ctx.fillStyle = "#1E2D24";
+  ctx.font = "bold 20px 'Segoe UI', Tahoma, sans-serif";
+  ctx.fillText(`Voucher Reference No: ${voucherId}`, 85, 310);
+
+  ctx.font = "17px 'Segoe UI', Tahoma, sans-serif";
+  ctx.fillStyle = "#556B5D";
+  ctx.fillText(`Issued: ${todayStr}`, 680, 310);
+
+  ctx.fillStyle = "#2F5233";
+  ctx.font = "bold 17px 'Segoe UI', Tahoma, sans-serif";
+  ctx.fillText("Authorized Scheme: Rashtriya Bal Swasthya Karyakram (RBSK / NHM National Health Mission)", 85, 342);
+
+  // Beneficiary Section
+  ctx.fillStyle = "#FFFFFF";
+  ctx.fillRect(60, 380, canvas.width - 120, 190);
+  ctx.strokeStyle = "#CAD5CA";
+  ctx.strokeRect(60, 380, canvas.width - 120, 190);
+
+  ctx.fillStyle = "#E8ECE8";
+  ctx.fillRect(60, 380, canvas.width - 120, 40);
+  ctx.fillStyle = "#2F5233";
+  ctx.font = "bold 18px 'Segoe UI', Tahoma, sans-serif";
+  ctx.fillText("BENEFICIARY & INFANT IDENTIFICATION", 85, 406);
+
+  ctx.fillStyle = "#222222";
+  ctx.font = "bold 18px 'Segoe UI', Tahoma, sans-serif";
+  ctx.fillText(`Patient Name: Baby ${patient.baby_name}`, 85, 450);
+  ctx.font = "17px 'Segoe UI', Tahoma, sans-serif";
+  ctx.fillStyle = "#444444";
+  ctx.fillText(`Mother's Name: ${patient.mother_name || "N/A"}`, 85, 482);
+  ctx.fillText(`Patient ID: ${patient.patient_id}  |  Ward: ${patient.nicu_bed || "NICU Bed #02"}`, 85, 514);
+  ctx.fillText(`Hospital Center: ${patient.hospital || "District SNCU & AIIMS Tele-ROP Center"}`, 85, 546);
+
+  ctx.fillText(`Gestational Age: ${patient.gestational_age_weeks || 28.0} wks`, 680, 450);
+  ctx.fillText(`Birth Weight: ${patient.birth_weight_grams || 1050} g`, 680, 482);
+  ctx.fillText(`Current PMA: ${patient.postmenstrual_age_weeks || 33.5} wks`, 680, 514);
+  ctx.fillStyle = "#2F5233";
+  ctx.font = "bold 17px 'Segoe UI', Tahoma, sans-serif";
+  ctx.fillText("Triage Status: Cashless 100% Approved", 680, 546);
+
+  // Clinical Indication Section
+  ctx.fillStyle = "#FFFFFF";
+  ctx.fillRect(60, 590, canvas.width - 120, 135);
+  ctx.strokeStyle = "#CAD5CA";
+  ctx.strokeRect(60, 590, canvas.width - 120, 135);
+
+  ctx.fillStyle = "#E8ECE8";
+  ctx.fillRect(60, 590, canvas.width - 120, 40);
+  ctx.fillStyle = "#2F5233";
+  ctx.font = "bold 18px 'Segoe UI', Tahoma, sans-serif";
+  ctx.fillText("CLINICAL DIAGNOSIS & COVERED RETINOPATHY PROCEDURES", 85, 616);
+
+  ctx.fillStyle = "#222222";
+  ctx.font = "bold 18px 'Segoe UI', Tahoma, sans-serif";
+  const stage = patient.stage_name || "Stage 2 (Intraretinal Ridge)";
+  const zone = patient.zone || "Zone II";
+  const plus = patient.plus_category || "Plus Disease";
+  ctx.fillText(`ICROP-3 Diagnosis: ${stage}, ${zone}, ${plus}`, 85, 660);
+
+  ctx.fillStyle = "#B35434"; // terracotta red
+  ctx.font = "bold 17px 'Segoe UI', Tahoma, sans-serif";
+  ctx.fillText(`Covered Treatment: Bilateral Diode Laser Photocoagulation / Anti-VEGF (${patient.urgency_code || 'P1'} - ${patient.urgency_label || 'High Urgency'})`, 85, 695);
+
+  // Itemized Table
+  const tableTop = 750;
+  ctx.fillStyle = "#2F5233";
+  ctx.fillRect(60, tableTop, canvas.width - 120, 46);
+
+  ctx.fillStyle = "#FFFFFF";
+  ctx.font = "bold 17px 'Segoe UI', Tahoma, sans-serif";
+  ctx.fillText("CLINICAL ITEM / PROCEDURE DESCRIPTION", 80, tableTop + 30);
+  ctx.fillText("GROSS (INR)", 700, tableTop + 30);
+  ctx.fillText("RBSK PAID", 870, tableTop + 30);
+  ctx.fillText("FAMILY SHARE", 1020, tableTop + 30);
+
+  const billingItems = [
+    { desc: "1. Bilateral Retinal Diode Laser Photocoagulation Procedure", gross: "₹ 22,000.00", rbsk: "₹ 22,000.00", fam: "₹ 0.00" },
+    { desc: "2. Expert Tele-Ophthalmology Grading & AI Vessel Biomarkers", gross: "₹ 3,500.00", rbsk: "₹ 3,500.00", fam: "₹ 0.00" },
+    { desc: "3. Neonatal ICU Consumables, Mydriatic Dilation Drops & Kit", gross: "₹ 1,800.00", rbsk: "₹ 1,800.00", fam: "₹ 0.00" },
+    { desc: "4. Digital Fundus Tele-Screening & Cloud Archival Storage", gross: "₹ 1,200.00", rbsk: "₹ 1,200.00", fam: "₹ 0.00" }
+  ];
+
+  let rowY = tableTop + 46;
+  billingItems.forEach((item, idx) => {
+    ctx.fillStyle = idx % 2 === 0 ? "#FFFFFF" : "#F8FAF8";
+    ctx.fillRect(60, rowY, canvas.width - 120, 52);
+    ctx.strokeStyle = "#E0E5E0";
+    ctx.strokeRect(60, rowY, canvas.width - 120, 52);
+
+    ctx.fillStyle = "#333333";
+    ctx.font = "16px 'Segoe UI', Tahoma, sans-serif";
+    ctx.fillText(item.desc, 80, rowY + 32);
+
+    ctx.fillStyle = "#444444";
+    ctx.fillText(item.gross, 700, rowY + 32);
+
+    ctx.fillStyle = "#2F5233";
+    ctx.font = "bold 16px 'Segoe UI', Tahoma, sans-serif";
+    ctx.fillText(item.rbsk, 870, rowY + 32);
+
+    ctx.fillStyle = "#2E7D32";
+    ctx.font = "bold 17px 'Segoe UI', Tahoma, sans-serif";
+    ctx.fillText(item.fam, 1040, rowY + 32);
+
+    rowY += 52;
+  });
+
+  // Summary Banner
+  ctx.fillStyle = "#EAF4EC";
+  ctx.fillRect(60, rowY + 15, canvas.width - 120, 140);
+  ctx.strokeStyle = "#2F5233";
+  ctx.lineWidth = 2;
+  ctx.strokeRect(60, rowY + 15, canvas.width - 120, 140);
+
+  ctx.fillStyle = "#444444";
+  ctx.font = "18px 'Segoe UI', Tahoma, sans-serif";
+  ctx.fillText("TOTAL GROSS HOSPITAL CHARGES:  ₹ 28,500.00", 85, rowY + 52);
+
+  ctx.fillStyle = "#2F5233";
+  ctx.font = "bold 18px 'Segoe UI', Tahoma, sans-serif";
+  ctx.fillText("GOVERNMENT NHM / RBSK SUBSIDY (100%): - ₹ 28,500.00", 85, rowY + 90);
+
+  ctx.fillStyle = "#B35434"; // terracotta red
+  ctx.font = "bold 23px 'Segoe UI', Tahoma, sans-serif";
+  ctx.fillText("NET OUT-OF-POCKET PAYABLE BY FAMILY:  ₹ 0.00 (100% FREE)", 85, rowY + 132);
+
+  // Security Seal & Signature Block
+  const sealY = rowY + 185;
+
+  // Left: Security Barcode Block
+  ctx.fillStyle = "#FFFFFF";
+  ctx.fillRect(75, sealY, 320, 110);
+  ctx.strokeStyle = "#CAD5CA";
+  ctx.lineWidth = 1;
+  ctx.strokeRect(75, sealY, 320, 110);
+
+  ctx.fillStyle = "#555555";
+  ctx.font = "13px 'Segoe UI', Tahoma, sans-serif";
+  ctx.fillText("DIGITAL VOUCHER TOKEN & BARCODE", 95, sealY + 28);
+
+  ctx.fillStyle = "#111111";
+  for (let bx = 95; bx < 375; bx += 8) {
+    const barWidth = bx % 3 === 0 ? 3 : 5;
+    ctx.fillRect(bx, sealY + 38, barWidth, 42);
+  }
+  ctx.font = "bold 13px monospace";
+  ctx.fillText(`*${voucherId}*`, 150, sealY + 98);
+
+  // Middle: Official Circular Stamp
+  const cx = 590;
+  const cy = sealY + 55;
+  ctx.save();
+  ctx.strokeStyle = "#2F5233";
+  ctx.lineWidth = 3;
+  ctx.beginPath();
+  ctx.arc(cx, cy, 52, 0, Math.PI * 2);
+  ctx.stroke();
+
+  ctx.strokeStyle = "#D4AF37";
+  ctx.lineWidth = 1.5;
+  ctx.beginPath();
+  ctx.arc(cx, cy, 47, 0, Math.PI * 2);
+  ctx.stroke();
+
+  ctx.textAlign = "center";
+  ctx.fillStyle = "#2F5233";
+  ctx.font = "bold 18px 'Segoe UI', Tahoma, sans-serif";
+  ctx.fillText("RBSK", cx, cy - 6);
+  ctx.fillStyle = "#B35434";
+  ctx.font = "bold 14px 'Segoe UI', Tahoma, sans-serif";
+  ctx.fillText("VERIFIED", cx, cy + 16);
+  ctx.fillStyle = "#2F5233";
+  ctx.font = "bold 11px 'Segoe UI', Tahoma, sans-serif";
+  ctx.fillText("NHM DISBURSED", cx, cy + 32);
+  ctx.restore();
+
+  // Right: Signature Box
+  ctx.fillStyle = "#FFFFFF";
+  ctx.fillRect(790, sealY, 350, 110);
+  ctx.strokeStyle = "#CAD5CA";
+  ctx.strokeRect(790, sealY, 350, 110);
+
+  ctx.textAlign = "left";
+  ctx.fillStyle = "#666666";
+  ctx.font = "14px 'Segoe UI', Tahoma, sans-serif";
+  ctx.fillText("Digitally Authorized By:", 810, sealY + 28);
+
+  ctx.fillStyle = "#1E2A78";
+  ctx.font = "bold 20px 'Segoe Script', cursive, 'Brush Script MT', sans-serif";
+  ctx.fillText("Dr. Ananya Roy, MD", 810, sealY + 62);
+
+  ctx.fillStyle = "#444444";
+  ctx.font = "13px 'Segoe UI', Tahoma, sans-serif";
+  ctx.fillText("Pediatric Retina Services, AIIMS Regional Centre", 810, sealY + 86);
+  ctx.fillText("Authorized Nodal Officer", 810, sealY + 102);
+
+  // Footer Legal Note
+  ctx.textAlign = "center";
+  ctx.fillStyle = "#666666";
+  ctx.font = "14px 'Segoe UI', Tahoma, sans-serif";
+  ctx.fillText("Official document issued under National Health Mission guidelines. Zero out-of-pocket charges permitted.", canvas.width / 2, canvas.height - 70);
+  ctx.font = "13px 'Segoe UI', Tahoma, sans-serif";
+  ctx.fillStyle = "#888888";
+  ctx.fillText("For billing verification, contact RBSK Nodal Cell: rbsk-helpdesk@nhm.gov.in | National Toll-Free: 104", canvas.width / 2, canvas.height - 48);
+
+  // Trigger download as PNG file
+  const filename = `ROP_Financial_Clearance_Voucher_${patient.patient_id}.png`;
+  const executeDownload = (url) => {
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    setTimeout(() => {
+      document.body.removeChild(a);
+      if (url.startsWith("blob:")) URL.revokeObjectURL(url);
+    }, 400);
+
+    if (statusEl) {
+      statusEl.style.display = "block";
+      statusEl.innerHTML = `✓ <strong>Success:</strong> Financial Clearance & Voucher Image Downloaded (<span style="font-family:monospace;">${filename}</span>).`;
+    }
+  };
+
+  try {
+    if (canvas.toBlob) {
+      canvas.toBlob(function (blob) {
+        if (blob) {
+          executeDownload(URL.createObjectURL(blob));
+        } else {
+          executeDownload(canvas.toDataURL("image/png"));
+        }
+      }, "image/png");
+    } else {
+      executeDownload(canvas.toDataURL("image/png"));
+    }
+  } catch (err) {
+    console.warn("Canvas blob error, using backend download fallback:", err);
+    executeDownload(`/api/voucher-image/${patient.patient_id}`);
+  }
+};

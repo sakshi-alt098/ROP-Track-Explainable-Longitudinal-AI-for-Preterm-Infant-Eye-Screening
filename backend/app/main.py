@@ -12,7 +12,7 @@ Architecture covering all 12 modules from the Master Project Brief:
 9. Patient Timeline
 10. Follow-up Tracker
 11. Cost Estimator
-12. Simulated Payment
+12. Financial Clearance & Voucher
 + Privacy Policy + 404 Handler + Offline/Brainstorming Mode
 """
 
@@ -27,7 +27,7 @@ import cv2
 import numpy as np
 from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import HTMLResponse, JSONResponse
+from fastapi.responses import HTMLResponse, JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
 
 # Add backend directory to path
@@ -572,19 +572,162 @@ def estimate_cost(
     }
 
 
+def _generate_voucher_image(patient: dict) -> bytes:
+    """Generates an official high-resolution Financial Clearance & Voucher invoice image."""
+    w, h = 1000, 1400
+    img = np.ones((h, w, 3), dtype=np.uint8) * 248
+    img[:, :, 0] = 245  # B
+    img[:, :, 1] = 248  # G
+    img[:, :, 2] = 250  # R
+
+    # Double Border (Deep Sage Green & Golden Tan)
+    cv2.rectangle(img, (24, 24), (w - 24, h - 24), (47, 82, 51), 3)
+    cv2.rectangle(img, (32, 32), (w - 32, h - 32), (55, 175, 212), 1)
+
+    # Header Banner
+    cv2.rectangle(img, (32, 32), (w - 32, 175), (47, 82, 51), -1)
+    cv2.putText(img, "GOVERNMENT OF INDIA - NATIONAL HEALTH MISSION (NHM)", (110, 68),
+                cv2.FONT_HERSHEY_SIMPLEX, 0.65, (220, 240, 230), 2, cv2.LINE_AA)
+    cv2.putText(img, "RASHTRIYA BAL SWASTHYA KARYAKRAM (RBSK)", (175, 105),
+                cv2.FONT_HERSHEY_SIMPLEX, 0.75, (255, 255, 255), 2, cv2.LINE_AA)
+    cv2.putText(img, "OFFICIAL FINANCIAL CLEARANCE & TREATMENT VOUCHER", (115, 146),
+                cv2.FONT_HERSHEY_SIMPLEX, 0.72, (95, 220, 255), 2, cv2.LINE_AA)
+
+    # Subtitle Ribbon
+    cv2.rectangle(img, (32, 175), (w - 32, 215), (230, 235, 230), -1)
+    cv2.putText(img, "Zero Out-of-Pocket Hospital Billing Invoice & Entitlement Certificate", (140, 202),
+                cv2.FONT_HERSHEY_SIMPLEX, 0.55, (40, 60, 45), 1, cv2.LINE_AA)
+
+    pid = patient.get("patient_id", "ROP-2026-001")
+    num_part = "".join([c for c in pid if c.isdigit()]) or "9041"
+    voucher_id = f"TXN-RBSK-2026-{num_part}"
+    today_str = datetime.now().strftime("%d %B %Y, %I:%M %p")
+
+    # Metadata Panel
+    cv2.rectangle(img, (50, 235), (w - 50, 310), (240, 243, 240), -1)
+    cv2.rectangle(img, (50, 235), (w - 50, 310), (180, 195, 185), 1)
+    cv2.putText(img, f"Voucher ID: {voucher_id}", (70, 265), cv2.FONT_HERSHEY_SIMPLEX, 0.55, (20, 30, 25), 2, cv2.LINE_AA)
+    cv2.putText(img, f"Issue Date: {today_str}", (520, 265), cv2.FONT_HERSHEY_SIMPLEX, 0.50, (60, 70, 65), 1, cv2.LINE_AA)
+    cv2.putText(img, "Authorized Scheme: Rashtriya Bal Swasthya Karyakram (RBSK / NHM)", (70, 295), cv2.FONT_HERSHEY_SIMPLEX, 0.50, (47, 82, 51), 2, cv2.LINE_AA)
+
+    # Beneficiary Section
+    cv2.rectangle(img, (50, 330), (w - 50, 490), (255, 255, 255), -1)
+    cv2.rectangle(img, (50, 330), (w - 50, 490), (180, 195, 185), 1)
+    cv2.rectangle(img, (50, 330), (w - 50, 365), (240, 245, 242), -1)
+    cv2.putText(img, "BENEFICIARY & INFANT IDENTIFICATION", (70, 355), cv2.FONT_HERSHEY_SIMPLEX, 0.55, (47, 82, 51), 2, cv2.LINE_AA)
+
+    baby_name = patient.get("baby_name", "Infant")
+    mother_name = patient.get("mother_name", "N/A")
+    bed = patient.get("nicu_bed", "NICU Bed #02")
+    hospital = patient.get("hospital", "District NICU")
+    ga = patient.get("gestational_age_weeks", 28.0)
+    bw = patient.get("birth_weight_grams", 1050)
+    pma = patient.get("postmenstrual_age_weeks", 33.5)
+
+    cv2.putText(img, f"Patient Name: Baby {baby_name}", (70, 395), cv2.FONT_HERSHEY_SIMPLEX, 0.55, (20, 20, 20), 1, cv2.LINE_AA)
+    cv2.putText(img, f"Mother's Name: {mother_name}", (70, 425), cv2.FONT_HERSHEY_SIMPLEX, 0.52, (60, 60, 60), 1, cv2.LINE_AA)
+    cv2.putText(img, f"Patient ID: {pid}  |  Ward: {bed}", (70, 455), cv2.FONT_HERSHEY_SIMPLEX, 0.52, (60, 60, 60), 1, cv2.LINE_AA)
+    cv2.putText(img, f"Hospital Center: {hospital}", (70, 480), cv2.FONT_HERSHEY_SIMPLEX, 0.50, (80, 80, 80), 1, cv2.LINE_AA)
+
+    cv2.putText(img, f"Gestational Age: {ga} wks", (550, 395), cv2.FONT_HERSHEY_SIMPLEX, 0.52, (60, 60, 60), 1, cv2.LINE_AA)
+    cv2.putText(img, f"Birth Weight: {bw} g", (550, 425), cv2.FONT_HERSHEY_SIMPLEX, 0.52, (60, 60, 60), 1, cv2.LINE_AA)
+    cv2.putText(img, f"Current PMA: {pma} wks", (550, 455), cv2.FONT_HERSHEY_SIMPLEX, 0.52, (60, 60, 60), 1, cv2.LINE_AA)
+    cv2.putText(img, "Triage Status: Cashless Approved", (550, 480), cv2.FONT_HERSHEY_SIMPLEX, 0.50, (47, 82, 51), 2, cv2.LINE_AA)
+
+    # Clinical Indication Box
+    cv2.rectangle(img, (50, 510), (w - 50, 620), (255, 255, 255), -1)
+    cv2.rectangle(img, (50, 510), (w - 50, 620), (180, 195, 185), 1)
+    cv2.rectangle(img, (50, 510), (w - 50, 545), (240, 245, 242), -1)
+    cv2.putText(img, "CLINICAL DIAGNOSIS & COVERED PROCEDURES", (70, 535), cv2.FONT_HERSHEY_SIMPLEX, 0.55, (47, 82, 51), 2, cv2.LINE_AA)
+
+    stage = patient.get("stage_name", "Stage 2 (Intraretinal Ridge)")
+    zone = patient.get("zone", "Zone II")
+    plus = patient.get("plus_category", "Plus Disease")
+    urgency = patient.get("urgency_code", "P1")
+    urgency_lbl = patient.get("urgency_label", "High Urgency")
+
+    cv2.putText(img, f"ICROP-3 Diagnosis: {stage}, {zone}, {plus}", (70, 575), cv2.FONT_HERSHEY_SIMPLEX, 0.52, (20, 20, 20), 1, cv2.LINE_AA)
+    cv2.putText(img, f"Covered Treatment: Bilateral Laser Photocoagulation / Anti-VEGF ({urgency} - {urgency_lbl})", (70, 605), cv2.FONT_HERSHEY_SIMPLEX, 0.50, (180, 50, 30), 2, cv2.LINE_AA)
+
+    # Itemized Financial Table
+    t_y = 645
+    cv2.rectangle(img, (50, t_y), (w - 50, t_y + 35), (47, 82, 51), -1)
+    cv2.putText(img, "ITEM / PROCEDURE DESCRIPTION", (65, t_y + 24), cv2.FONT_HERSHEY_SIMPLEX, 0.48, (255, 255, 255), 1, cv2.LINE_AA)
+    cv2.putText(img, "GROSS (INR)", (580, t_y + 24), cv2.FONT_HERSHEY_SIMPLEX, 0.48, (255, 255, 255), 1, cv2.LINE_AA)
+    cv2.putText(img, "RBSK PAID", (720, t_y + 24), cv2.FONT_HERSHEY_SIMPLEX, 0.48, (255, 255, 255), 1, cv2.LINE_AA)
+    cv2.putText(img, "PATIENT PAYS", (845, t_y + 24), cv2.FONT_HERSHEY_SIMPLEX, 0.48, (255, 255, 255), 1, cv2.LINE_AA)
+
+    items = [
+        ("1. Bilateral Retinal Diode Laser Photocoagulation", "22,000.00", "22,000.00", "0.00"),
+        ("2. Expert Tele-Ophthalmology Grading & AI Biomarkers", "3,500.00", "3,500.00", "0.00"),
+        ("3. Neonatal ICU Consumables & Dilation Eye Drops", "1,800.00", "1,800.00", "0.00"),
+        ("4. Digital Fundus Tele-Screening & Archival Storage", "1,200.00", "1,200.00", "0.00")
+    ]
+    cur_y = t_y + 35
+    for idx, (desc, gross, rbsk, pat) in enumerate(items):
+        bg_col = (255, 255, 255) if idx % 2 == 0 else (248, 250, 248)
+        cv2.rectangle(img, (50, cur_y), (w - 50, cur_y + 42), bg_col, -1)
+        cv2.rectangle(img, (50, cur_y), (w - 50, cur_y + 42), (210, 215, 210), 1)
+        cv2.putText(img, desc, (65, cur_y + 27), cv2.FONT_HERSHEY_SIMPLEX, 0.46, (40, 40, 40), 1, cv2.LINE_AA)
+        cv2.putText(img, f"Rs {gross}", (580, cur_y + 27), cv2.FONT_HERSHEY_SIMPLEX, 0.46, (50, 50, 50), 1, cv2.LINE_AA)
+        cv2.putText(img, f"Rs {rbsk}", (720, cur_y + 27), cv2.FONT_HERSHEY_SIMPLEX, 0.46, (47, 82, 51), 1, cv2.LINE_AA)
+        cv2.putText(img, f"Rs {pat}", (865, cur_y + 27), cv2.FONT_HERSHEY_SIMPLEX, 0.46, (20, 100, 30), 2, cv2.LINE_AA)
+        cur_y += 42
+
+    # Total Summary
+    cv2.rectangle(img, (50, cur_y + 10), (w - 50, cur_y + 115), (235, 245, 238), -1)
+    cv2.rectangle(img, (50, cur_y + 10), (w - 50, cur_y + 115), (47, 82, 51), 2)
+    cv2.putText(img, "TOTAL GROSS HOSPITAL CHARGES: Rs 28,500.00", (70, cur_y + 40), cv2.FONT_HERSHEY_SIMPLEX, 0.52, (60, 60, 60), 1, cv2.LINE_AA)
+    cv2.putText(img, "GOVERNMENT NHM / RBSK SUBSIDY (100%): - Rs 28,500.00", (70, cur_y + 70), cv2.FONT_HERSHEY_SIMPLEX, 0.52, (47, 82, 51), 2, cv2.LINE_AA)
+    cv2.putText(img, "NET OUT-OF-POCKET PAYABLE BY FAMILY: Rs 0.00 (100% FREE)", (70, cur_y + 102), cv2.FONT_HERSHEY_SIMPLEX, 0.62, (180, 50, 30), 2, cv2.LINE_AA)
+
+    # Security Token & Signature
+    seal_y = cur_y + 140
+    cv2.rectangle(img, (60, seal_y), (320, seal_y + 90), (255, 255, 255), -1)
+    cv2.rectangle(img, (60, seal_y), (320, seal_y + 90), (190, 195, 190), 1)
+    cv2.putText(img, "SECURITY TOKEN & HASH", (75, seal_y + 24), cv2.FONT_HERSHEY_SIMPLEX, 0.40, (100, 100, 100), 1, cv2.LINE_AA)
+    for bx in range(75, 305, 7):
+        b_w = 2 if (bx % 3 == 0) else 4
+        cv2.line(img, (bx, seal_y + 35), (bx, seal_y + 72), (20, 20, 20), b_w)
+    cv2.putText(img, f"*{voucher_id}*", (95, seal_y + 84), cv2.FONT_HERSHEY_SIMPLEX, 0.38, (40, 40, 40), 1, cv2.LINE_AA)
+
+    center_seal = (500, seal_y + 48)
+    cv2.circle(img, center_seal, 46, (47, 82, 51), 2)
+    cv2.circle(img, center_seal, 42, (55, 175, 212), 1)
+    cv2.putText(img, "RBSK", (478, seal_y + 45), cv2.FONT_HERSHEY_SIMPLEX, 0.55, (47, 82, 51), 2, cv2.LINE_AA)
+    cv2.putText(img, "VERIFIED", (466, seal_y + 65), cv2.FONT_HERSHEY_SIMPLEX, 0.42, (180, 50, 30), 1, cv2.LINE_AA)
+
+    cv2.rectangle(img, (680, seal_y), (w - 60, seal_y + 90), (255, 255, 255), -1)
+    cv2.rectangle(img, (680, seal_y), (w - 60, seal_y + 90), (190, 195, 190), 1)
+    cv2.putText(img, "Digitally Authorized By:", (700, seal_y + 24), cv2.FONT_HERSHEY_SIMPLEX, 0.40, (90, 90, 90), 1, cv2.LINE_AA)
+    cv2.putText(img, "Dr. Ananya Roy, MD", (700, seal_y + 52), cv2.FONT_HERSHEY_SIMPLEX, 0.55, (20, 20, 80), 2, cv2.LINE_AA)
+    cv2.putText(img, "Pediatric Retina Services, AIIMS", (700, seal_y + 76), cv2.FONT_HERSHEY_SIMPLEX, 0.40, (80, 80, 80), 1, cv2.LINE_AA)
+
+    f_y = h - 60
+    cv2.putText(img, "Official document issued under National Health Mission guidelines. Zero out-of-pocket charges permitted.",
+                (80, f_y), cv2.FONT_HERSHEY_SIMPLEX, 0.42, (100, 110, 105), 1, cv2.LINE_AA)
+    cv2.putText(img, "For billing inquiries contact RBSK Nodal Cell: rbsk-helpdesk@nhm.gov.in | Toll-Free 104",
+                (175, f_y + 20), cv2.FONT_HERSHEY_SIMPLEX, 0.38, (120, 130, 125), 1, cv2.LINE_AA)
+
+    _, buf = cv2.imencode(".png", img)
+    return buf.tobytes()
+
+
+@app.post("/api/financial-voucher")
 @app.post("/api/simulate-payment")
-def simulate_payment(
+def generate_financial_voucher(
     patient_id: str = Form(...),
     scheme_name: str = Form("Rashtriya Bal Swasthya Karyakram (RBSK)"),
     amount: float = Form(0.0)
 ):
-    txn_id = f"TXN-MED-{str(uuid.uuid4())[:8].upper()}"
+    num_part = "".join([c for c in patient_id if c.isdigit()]) or str(uuid.uuid4())[:4]
+    txn_id = f"TXN-RBSK-2026-{num_part}"
     record = {
         "transaction_id": txn_id,
         "patient_id": patient_id,
         "scheme": scheme_name,
         "amount_inr": amount,
-        "status": "Settled & Verified by Hospital Admin",
+        "status": "Approved & Verified by Hospital Financial Cell",
         "date": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     }
     PAYMENTS.insert(0, record)
@@ -592,6 +735,39 @@ def simulate_payment(
         if p["patient_id"] == patient_id:
             p["payment_status"] = f"Voucher Generated ({txn_id})"
     return {"status": "success", "transaction": record}
+
+
+@app.get("/api/voucher-image/{patient_id}")
+def get_voucher_image(patient_id: str):
+    target = None
+    for p in PATIENTS:
+        if p["patient_id"] == patient_id:
+            target = p
+            break
+    if not target:
+        target = PATIENTS[0] if PATIENTS else {
+            "patient_id": patient_id,
+            "baby_name": "Infant",
+            "mother_name": "Mother",
+            "nicu_bed": "NICU Bed #02",
+            "hospital": "District NICU",
+            "gestational_age_weeks": 28.0,
+            "birth_weight_grams": 1050,
+            "postmenstrual_age_weeks": 33.5,
+            "stage_name": "Stage 2/3 ROP",
+            "zone": "Zone II",
+            "plus_category": "Plus Disease",
+            "urgency_code": "P1",
+            "urgency_label": "High Urgency"
+        }
+    png_bytes = _generate_voucher_image(target)
+    return Response(
+        content=png_bytes,
+        media_type="image/png",
+        headers={
+            "Content-Disposition": f"attachment; filename=ROP_Financial_Clearance_Voucher_{target.get('patient_id', 'Voucher')}.png"
+        }
+    )
 
 
 def _generate_synthetic_fundus(case_type: str = "type1_stage3") -> np.ndarray:

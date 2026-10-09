@@ -74,7 +74,7 @@
       <button class="screen-link" id="navLinkTimeline" onclick="switchView('patientTimelineView')">8. Patient Timeline</button>
       <button class="screen-link" id="navLinkFollowup" onclick="switchView('followupTrackerView')">9. Follow-up Tracker</button>
       <button class="screen-link" id="navLinkCost" onclick="switchView('costEstimatorView')">10. Cost Estimator</button>
-      <button class="screen-link" id="navLinkPayment" onclick="switchView('paymentView')">11. Simulated Payment</button>
+      <button class="screen-link" id="navLinkPayment" onclick="switchView('paymentView')">11. Financial Clearance & Voucher</button>
     </nav>
   </div>
 
@@ -959,27 +959,102 @@
       </div>
     </section>
 
-    <!-- SCREEN 12: SIMULATED PAYMENT & VOUCHER -->
+    <!-- SCREEN 12: FINANCIAL CLEARANCE & VOUCHER -->
     <section id="paymentView" class="view-section">
-      <div class="panel-card ss-scroll scale-in" style="max-width: 600px; margin: 0 auto; text-align: center;">
-        <div class="card-header" style="justify-content: center;">
-          <h2>Financial Clearance & Voucher</h2>
-        </div>
-        <div style="margin: 1.5rem 0;">
-          <span class="badge badge-sage" style="font-size: 0.9rem; padding: 0.4rem 1rem;">RBSK Scheme Voucher Approved</span>
-          <div style="font-size: 1.8rem; font-weight: 800; color: var(--terracotta-brown); margin-top: 0.75rem;">Rs 0.00</div>
-          <p style="font-size: 0.78rem; color: var(--text-muted); margin-top: 0.25rem;">Zero Out-of-Pocket Expense for Family</p>
+      <div class="panel-card ss-scroll scale-in" style="max-width: 680px; margin: 0 auto;">
+        <div class="card-header" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.5rem;">
+          <h2 style="margin: 0;">Financial Clearance & Voucher</h2>
+          <span class="badge badge-sage" id="voucherSchemeBadge" style="font-size: 0.85rem; padding: 0.4rem 0.9rem;">RBSK Scheme 100% Cashless Voucher</span>
         </div>
 
-        <div style="background: var(--warm-beige-panel); border: 1px solid var(--warm-beige-border); border-radius: 0.35rem; padding: 1rem; text-align: left; font-size: 0.8rem; margin-bottom: 1.5rem;">
-          <div><strong>Beneficiary:</strong> Baby of Sharma (ID: ROP-2026-001)</div>
-          <div style="margin-top: 0.3rem;"><strong>Voucher ID:</strong> TXN-RBSK-2026-9041</div>
-          <div style="margin-top: 0.3rem;"><strong>Authorized Center:</strong> AIIMS Regional NICU Centre</div>
-          <div style="margin-top: 0.3rem;"><strong>Procedure:</strong> Bilateral Laser Photocoagulation</div>
+        <!-- Patient Selection for Voucher -->
+        <div style="margin: 1.25rem 0 1rem 0; text-align: left;">
+          <label style="font-size: 0.82rem; font-weight: 700; color: var(--text-muted); display: block; margin-bottom: 0.35rem;">
+            Select Registered Infant / Patient:
+          </label>
+          <select id="voucherPatientSelect" class="form-control" onchange="updatePaymentVoucherView(this.value)">
+          </select>
         </div>
 
-        <button class="btn-sage" onclick="document.getElementById('invoiceDownloadStatus').style.display='inline-block'">Download Official Hospital Invoice</button>
-        <div id="invoiceDownloadStatus" style="display: none; margin-top: 0.65rem; color: var(--sage-green-dark); font-size: 0.8rem; font-weight: 600;">✓ Done: Official Invoice Downloaded & Stored in Billing Archive.</div>
+        <!-- Zero Cost Hero Banner -->
+        <div style="margin: 1.25rem 0; padding: 1.25rem; background: #f0f7f3; border: 1px solid #c8e6c9; border-radius: 0.5rem; text-align: center;">
+          <span class="badge badge-sage" style="font-size: 0.85rem; padding: 0.35rem 0.85rem; font-weight: 700;">Government of India • NHM Approved</span>
+          <div style="font-size: 2.2rem; font-weight: 800; color: var(--terracotta-brown); margin-top: 0.5rem;">₹ 0.00</div>
+          <p style="font-size: 0.85rem; font-weight: 700; color: var(--sage-green-dark); margin-top: 0.25rem;">
+            100% Cashless Treatment • Zero Out-of-Pocket Expense for Family
+          </p>
+          <p style="font-size: 0.75rem; color: var(--text-muted); margin-top: 0.2rem;">
+            Full subsidy disbursed directly under Rashtriya Bal Swasthya Karyakram (RBSK)
+          </p>
+        </div>
+
+        <!-- Detailed Voucher Data Card -->
+        <div style="background: var(--warm-beige-panel); border: 1px solid var(--warm-beige-border); border-radius: 0.45rem; padding: 1.15rem; text-align: left; font-size: 0.82rem; margin-bottom: 1.25rem;">
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.6rem;">
+            <div><strong>Beneficiary:</strong> <span id="voucherBeneficiaryName">Baby Sharma (Twin 1)</span> (<span id="voucherPatientId">ROP-2026-001</span>)</div>
+            <div><strong>Mother's Name:</strong> <span id="voucherMotherName">Pooja Sharma</span></div>
+            <div><strong>Voucher Ref No:</strong> <span id="voucherId" style="font-family: monospace; color: var(--terracotta-brown); font-weight: 700;">TXN-RBSK-2026-001</span></div>
+            <div><strong>Ward / Bed:</strong> <span id="voucherBed">NICU Bed #04</span></div>
+            <div style="grid-column: span 2;"><strong>Authorized Hospital:</strong> <span id="voucherHospital">District SNCU & AIIMS Tele-ROP Center</span></div>
+            <div style="grid-column: span 2;"><strong>Clinical Finding:</strong> <span id="voucherClinicalFinding">Stage 2 (Intraretinal Ridge), Zone II, Plus Disease</span></div>
+            <div style="grid-column: span 2;"><strong>Covered Procedure:</strong> <span id="voucherProcedure">Bilateral Laser Photocoagulation / Intravitreal Anti-VEGF</span></div>
+          </div>
+        </div>
+
+        <!-- Itemized Financial Breakdown Table -->
+        <div style="border: 1px solid var(--warm-beige-border); border-radius: 0.4rem; overflow: hidden; margin-bottom: 1.5rem; text-align: left;">
+          <table style="width: 100%; border-collapse: collapse; font-size: 0.78rem;">
+            <thead>
+              <tr style="background: var(--sage-green); color: white;">
+                <th style="padding: 0.55rem 0.75rem; text-align: left;">Clinical Item / Service</th>
+                <th style="padding: 0.55rem 0.75rem; text-align: right;">Standard Fee</th>
+                <th style="padding: 0.55rem 0.75rem; text-align: right;">RBSK Covered</th>
+                <th style="padding: 0.55rem 0.75rem; text-align: right;">Family Share</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr style="border-bottom: 1px solid var(--warm-beige-border);">
+                <td style="padding: 0.5rem 0.75rem;">1. Bilateral Retinal Laser Photocoagulation</td>
+                <td style="padding: 0.5rem 0.75rem; text-align: right;">₹ 22,000.00</td>
+                <td style="padding: 0.5rem 0.75rem; text-align: right; color: var(--sage-green-dark); font-weight: 600;">₹ 22,000.00</td>
+                <td style="padding: 0.5rem 0.75rem; text-align: right; font-weight: 700; color: #2e7d32;">₹ 0.00</td>
+              </tr>
+              <tr style="border-bottom: 1px solid var(--warm-beige-border); background: #fdfdfc;">
+                <td style="padding: 0.5rem 0.75rem;">2. Expert Tele-Ophthalmology & AI Biomarker Grading</td>
+                <td style="padding: 0.5rem 0.75rem; text-align: right;">₹ 3,500.00</td>
+                <td style="padding: 0.5rem 0.75rem; text-align: right; color: var(--sage-green-dark); font-weight: 600;">₹ 3,500.00</td>
+                <td style="padding: 0.5rem 0.75rem; text-align: right; font-weight: 700; color: #2e7d32;">₹ 0.00</td>
+              </tr>
+              <tr style="border-bottom: 1px solid var(--warm-beige-border);">
+                <td style="padding: 0.5rem 0.75rem;">3. Neonatal ICU Consumables & Dilation Eye Drops</td>
+                <td style="padding: 0.5rem 0.75rem; text-align: right;">₹ 1,800.00</td>
+                <td style="padding: 0.5rem 0.75rem; text-align: right; color: var(--sage-green-dark); font-weight: 600;">₹ 1,800.00</td>
+                <td style="padding: 0.5rem 0.75rem; text-align: right; font-weight: 700; color: #2e7d32;">₹ 0.00</td>
+              </tr>
+              <tr style="border-bottom: 1px solid var(--warm-beige-border); background: #fdfdfc;">
+                <td style="padding: 0.5rem 0.75rem;">4. Tele-Screening Archival & Longitudinal Tracking</td>
+                <td style="padding: 0.5rem 0.75rem; text-align: right;">₹ 1,200.00</td>
+                <td style="padding: 0.5rem 0.75rem; text-align: right; color: var(--sage-green-dark); font-weight: 600;">₹ 1,200.00</td>
+                <td style="padding: 0.5rem 0.75rem; text-align: right; font-weight: 700; color: #2e7d32;">₹ 0.00</td>
+              </tr>
+              <tr style="background: #f0f7f3; font-weight: 700;">
+                <td style="padding: 0.65rem 0.75rem; color: var(--terracotta-brown);">Net Total Billing</td>
+                <td style="padding: 0.65rem 0.75rem; text-align: right;">₹ 28,500.00</td>
+                <td style="padding: 0.65rem 0.75rem; text-align: right; color: var(--sage-green-dark);">- ₹ 28,500.00</td>
+                <td style="padding: 0.65rem 0.75rem; text-align: right; color: #2e7d32; font-size: 0.88rem;">₹ 0.00 (FREE)</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <!-- Download Action -->
+        <div style="text-align: center;">
+          <button class="btn-sage" id="btnDownloadInvoice" onclick="downloadFinancialVoucherInvoiceImage()" style="display: inline-flex; align-items: center; justify-content: center; gap: 0.6rem; font-weight: 700; padding: 0.75rem 1.6rem; font-size: 0.95rem; cursor: pointer; border-radius: 0.4rem; box-shadow: 0 4px 12px rgba(47, 82, 51, 0.2);">
+            📥 Download Official Hospital Invoice & Voucher (PNG Image)
+          </button>
+          <div id="invoiceDownloadStatus" style="display: none; margin-top: 0.85rem; padding: 0.65rem 1rem; border-radius: 0.35rem; background: #e8f5e9; border: 1px solid #c8e6c9; color: #2e7d32; font-size: 0.82rem; font-weight: 600; text-align: center;">
+          </div>
+        </div>
       </div>
     </section>
 
