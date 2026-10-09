@@ -303,34 +303,34 @@ window.setRole = function (role) {
 
   const isSpecialist = (role === "specialist");
   const roleLabel = document.getElementById("activeRoleLabel");
+  const roleIcon = document.getElementById("authenticatedRoleIcon");
   if (roleLabel) {
-    roleLabel.innerText = isSpecialist ? "Portal: Pediatric Retina Specialist" : "Portal: NICU Screening Assistant";
+    roleLabel.innerText = isSpecialist ? "Specialist Portal (Dr. Ananya Roy, MD)" : "NICU Screening Portal (Bedside Assistant)";
+  }
+  if (roleIcon) {
+    roleIcon.innerText = isSpecialist ? "🔬" : "🩺";
   }
 
-  const tabAssistant = document.getElementById("roleTabAssistant");
-  const tabSpec = document.getElementById("roleTabSpecialist");
-  if (tabAssistant) tabAssistant.classList.toggle("active", !isSpecialist);
-  if (tabSpec) tabSpec.classList.toggle("active", isSpecialist);
-
-  // STRICT TAB VISIBILITY:
+  // STRICT TAB ISOLATION:
   // 1. Specialist tabs (Specialist Queue, Specialist Case Review):
-  //    ONLY visible to Specialist, completely HIDDEN from Screening Assistant
+  //    VISIBLE ONLY to Specialist; COMPLETELY HIDDEN from Screening Assistant
   document.querySelectorAll(".role-spec-only").forEach((el) => {
     el.style.display = isSpecialist ? "inline-block" : "none";
   });
 
-  // 2. Upload/Bedside tabs (Visit + Image Upload):
-  //    VISIBLE to Screening Assistant, HIDDEN from Specialist
-  const uploadNav = document.getElementById("navLinkUpload");
-  if (uploadNav) {
-    uploadNav.style.display = isSpecialist ? "none" : "inline-block";
-  }
+  // 2. Bedside/Assistant tabs (Visit Upload, Case Submission):
+  //    VISIBLE ONLY to Screening Assistant; COMPLETELY HIDDEN from Specialist
+  document.querySelectorAll(".role-assist-only").forEach((el) => {
+    // If specialist, hide image upload and bedside submit buttons
+    if (el.id === "navLinkUpload" || el.id === "navLinkCaseSubmit") {
+      el.style.display = isSpecialist ? "none" : "inline-block";
+    }
+  });
 
-  // 3. Routing to landing page
+  // 3. Landing page routing per role
   if (isSpecialist) {
     switchView("specialistQueueView");
   } else {
-    // Screening assistant landing page
     switchView("visitUploadView");
   }
 };
@@ -338,6 +338,7 @@ window.setRole = function (role) {
 window.logoutUser = function () {
   const navHeader = document.getElementById("appNavigationHeader");
   if (navHeader) navHeader.style.display = "none";
+  currentRole = null;
   switchView("loginView");
 };
 

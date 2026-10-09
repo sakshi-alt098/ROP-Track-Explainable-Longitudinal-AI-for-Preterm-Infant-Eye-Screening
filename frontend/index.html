@@ -50,14 +50,15 @@
         <p class="brand-subtitle">Hospital Tele-Screening, Remote Specialist Review & Longitudinal Care Platform</p>
       </div>
 
-      <!-- Active Portal & Logout Control -->
-      <div style="display: flex; align-items: center; gap: 0.75rem;">
-        <span style="font-size: 0.75rem; color: var(--text-muted);" id="activeRoleLabel">Portal: Screening Assistant</span>
-        <div class="role-nav">
-          <button class="role-tab active" id="roleTabAssistant" onclick="setRole('assistant')">Screening Assistant</button>
-          <button class="role-tab" id="roleTabSpecialist" onclick="setRole('specialist')">Specialist Reviewer</button>
-          <button class="role-tab" style="background: rgba(184,80,58,0.1); color: var(--terracotta-brown);" onclick="logoutUser()">Log Out</button>
+      <!-- Authenticated User Profile Badge & Logout -->
+      <div style="display: flex; align-items: center; gap: 0.85rem;">
+        <div id="authenticatedUserBadge" style="display: flex; align-items: center; gap: 0.45rem; background: var(--warm-beige-panel); border: 1px solid var(--warm-beige-border); padding: 0.35rem 0.85rem; border-radius: 9999px;">
+          <span id="authenticatedRoleIcon" style="font-size: 0.95rem;">🔬</span>
+          <span style="font-size: 0.78rem; font-weight: 700; color: var(--terracotta-brown);" id="activeRoleLabel">Specialist Portal</span>
         </div>
+        <button class="btn-outline" style="font-size: 0.75rem; padding: 0.35rem 0.85rem; border-color: var(--terracotta-brown); color: var(--terracotta-brown);" onclick="logoutUser()">
+          Log Out
+        </button>
       </div>
     </header>
 
