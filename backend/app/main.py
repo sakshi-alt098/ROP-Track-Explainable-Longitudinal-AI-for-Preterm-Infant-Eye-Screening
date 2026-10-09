@@ -79,6 +79,7 @@ PATIENTS = [
         "postmenstrual_age_weeks": 34.2,
         "weight_gain_g_per_day": 8.5,
         "supplemental_o2_days": 21,
+        "has_image_captured": True,
         "status": "Pending Specialist Review",
         "urgency_code": "P1",
         "urgency_label": "Type 1 ROP (High Urgency)",
@@ -105,6 +106,7 @@ PATIENTS = [
         "postmenstrual_age_weeks": 34.0,
         "weight_gain_g_per_day": 14.0,
         "supplemental_o2_days": 9,
+        "has_image_captured": True,
         "status": "Under Observation",
         "urgency_code": "P2",
         "urgency_label": "Type 2 ROP (Priority Triage)",
@@ -131,6 +133,7 @@ PATIENTS = [
         "postmenstrual_age_weeks": 35.5,
         "weight_gain_g_per_day": 20.0,
         "supplemental_o2_days": 4,
+        "has_image_captured": True,
         "status": "Routine Follow-up",
         "urgency_code": "P3",
         "urgency_label": "Routine Follow-Up",
@@ -142,6 +145,33 @@ PATIENTS = [
         "scheduled_followup": "In 10 days (Routine)",
         "assigned_specialist": "Dr. Ananya Roy, MD",
         "payment_status": "Free Government Screening",
+        "cost_estimate": 0
+    },
+    {
+        "patient_id": "ROP-2026-004",
+        "baby_name": "Verma",
+        "mother_name": "Sunita Verma",
+        "parent_phone": "+91 98450 11223",
+        "nicu_bed": "NICU-Bed-07",
+        "hospital": "AIIMS Regional NICU Centre",
+        "dob": "2026-09-12",
+        "gestational_age_weeks": 28.5,
+        "birth_weight_grams": 980,
+        "postmenstrual_age_weeks": 32.5,
+        "weight_gain_g_per_day": 9.0,
+        "supplemental_o2_days": 18,
+        "has_image_captured": False,
+        "status": "Not Captured",
+        "urgency_code": "Pending",
+        "urgency_label": "Not Captured",
+        "stage_name": "Not Captured",
+        "zone": "Pending Scan",
+        "plus_category": "Pending Scan",
+        "plus_score": 0.0,
+        "last_examined": "Never",
+        "scheduled_followup": "Immediate Baseline Scan",
+        "assigned_specialist": "Dr. Ananya Roy, MD",
+        "payment_status": "Eligible for RBSK Scheme",
         "cost_estimate": 0
     }
 ]
@@ -221,12 +251,13 @@ def register_patient(
         "postmenstrual_age_weeks": pma,
         "weight_gain_g_per_day": weight_gain_g_per_day,
         "supplemental_o2_days": supplemental_o2_days,
-        "status": "Registered - Awaiting First Visit",
-        "urgency_code": "P3",
-        "urgency_label": "Screening Due",
-        "stage_name": "Pending Screening",
-        "zone": "Pending",
-        "plus_category": "Pending",
+        "has_image_captured": False,
+        "status": "Not Captured",
+        "urgency_code": "Pending",
+        "urgency_label": "Not Captured",
+        "stage_name": "Not Captured",
+        "zone": "Pending Scan",
+        "plus_category": "Pending Scan",
         "plus_score": 0.0,
         "last_examined": "Never",
         "scheduled_followup": "Immediate Baseline Scan",
@@ -262,6 +293,32 @@ async def analyze_fundus(
         image_bgr = _generate_synthetic_fundus(sample_case or "type1_stage3")
 
     quality_result = quality_gate.assess_image(image_bgr)
+
+    # Encode original uploaded image to base64
+    _, orig_buf = cv2.imencode(".jpg", image_bgr, [int(cv2.IMWRITE_JPEG_QUALITY), 90])
+    orig_base64 = "data:image/jpeg;base64," + base64.b64encode(orig_buf).decode("utf-8")
+
+    # IF IMAGE IS UNGRADABLE, BLURRED, OR BLANK: REQUIRE RETAKE INSTEAD OF CREATING REPORT
+    if quality_result.get("requires_retake", False) or not quality_result.get("is_gradable", True):
+        retake_reason = quality_result["warnings"][0] if quality_result.get("warnings") else "Image is ungradable or blank."
+        for p in PATIENTS:
+            if p["patient_id"] == patient_id:
+                p["status"] = "Retake Required (Ungradable Scan)"
+                p["has_image_captured"] = False
+                p["last_examined"] = "Attempted Just Now"
+
+        return {
+            "status": "retake_required",
+            "requires_retake": True,
+            "patient_id": patient_id,
+            "baby_name": baby_name,
+            "original_image_base64": orig_base64,
+            "quality_assessment": quality_result,
+            "retake_reason": retake_reason,
+            "message": "Image Quality Rejected: Retake Required"
+        }
+
+    # AI SEES RETINA AND VALID RETINAL VASCULATURE - PROCEED WITH FULL REPORT
     biomarker_result = vessel_engine.process_fundus(image_bgr)
 
     if sample_case == "arop":
@@ -309,18 +366,15 @@ async def analyze_fundus(
         patient_id, baby_name, parent_phone, icrop3_result, longitudinal_result
     )
 
-    # Encode original uploaded image to base64
-    _, orig_buf = cv2.imencode(".jpg", image_bgr, [int(cv2.IMWRITE_JPEG_QUALITY), 90])
-    orig_base64 = "data:image/jpeg;base64," + base64.b64encode(orig_buf).decode("utf-8")
-
     # Generate AI Red Abnormality Circles & Pathological Heatmap Overlay
     marked_ai_bgr, abnormality_zones = _generate_ai_abnormality_overlay(image_bgr, biomarker_result, icrop3_result)
     _, ai_buf = cv2.imencode(".jpg", marked_ai_bgr, [int(cv2.IMWRITE_JPEG_QUALITY), 90])
     ai_marked_base64 = "data:image/jpeg;base64," + base64.b64encode(ai_buf).decode("utf-8")
 
-    # Update patient record if exists
+    # Update patient record with newly captured scan and updated priority
     for p in PATIENTS:
         if p["patient_id"] == patient_id:
+            p["has_image_captured"] = True
             p["urgency_code"] = icrop3_result["urgency_code"]
             p["urgency_label"] = icrop3_result["urgency_label"]
             p["stage_name"] = icrop3_result["stage_name"]
@@ -330,9 +384,13 @@ async def analyze_fundus(
             p["scheduled_followup"] = scheduler_result["formatted_schedule"]
             p["last_examined"] = "Just now"
             p["status"] = "Pending Specialist Review" if icrop3_result["urgency_code"] in ["P0", "P1", "P2"] else "Routine Follow-Up"
+            p["original_image_base64"] = orig_base64
+            p["ai_marked_image_base64"] = ai_marked_base64
+            p["abnormality_zones"] = abnormality_zones
 
     return {
         "status": "success",
+        "requires_retake": False,
         "patient_id": patient_id,
         "baby_name": baby_name,
         "original_image_base64": orig_base64,

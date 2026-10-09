@@ -393,7 +393,10 @@ function populateAllPatientDropdowns(patients) {
     const currentVal = sel.value || activePatientId;
     sel.innerHTML = patients
       .map(
-        (p) => `<option value="${p.patient_id}">${p.baby_name} (${p.patient_id}) - ${p.stage_name || 'ROP'}</option>`
+        (p) => {
+          const capTag = p.has_image_captured ? "✓ Captured" : "📷 Not Captured";
+          return `<option value="${p.patient_id}">Baby ${p.baby_name} (Mother: ${p.mother_name || 'N/A'}) [${p.patient_id}] - ${capTag}</option>`;
+        }
       )
       .join("");
     if (patients.some((p) => p.patient_id === currentVal)) {
@@ -402,12 +405,15 @@ function populateAllPatientDropdowns(patients) {
       sel.value = patients[0].patient_id;
     }
   });
+
+  // Keep upload card updated with current patient
+  onVisitPatientChange(activePatientId);
 }
 
 function updateDashboardCounters(patients) {
-  const urgent = patients.filter((p) => p.urgency_code === "P0" || p.urgency_code === "P1").length;
-  const priority = patients.filter((p) => p.urgency_code === "P2").length;
-  const routine = patients.filter((p) => p.urgency_code === "P3").length;
+  const urgent = patients.filter((p) => p.has_image_captured && (p.urgency_code === "P0" || p.urgency_code === "P1")).length;
+  const priority = patients.filter((p) => p.has_image_captured && p.urgency_code === "P2").length;
+  const routine = patients.filter((p) => p.has_image_captured && p.urgency_code === "P3").length;
 
   document.getElementById("statUrgentCount").innerText = urgent;
   document.getElementById("statPriorityCount").innerText = priority;
@@ -420,23 +426,37 @@ function renderNicuTable(patients) {
 
   tbody.innerHTML = patients
     .map(
-      (p) => `
-    <tr>
+      (p) => {
+        const isCaptured = Boolean(p.has_image_captured);
+        const scanStatusHtml = isCaptured
+          ? `<span class="badge badge-sage" style="font-weight:700;">✓ Captured</span>`
+          : `<span class="badge badge-tan" style="background:#fff3cd; color:#856404; font-weight:700; border:1px solid #ffeeba;">📷 Not Captured</span>`;
+
+        const priorityHtml = isCaptured
+          ? `<span class="badge ${getUrgencyBadgeClass(p.urgency_code)}">${p.urgency_code}: ${p.urgency_label}</span>`
+          : `<span class="badge" style="background:#e9ecef; color:#6c757d; font-weight:600;">Pending Scan</span>`;
+
+        return `
+    <tr style="${!isCaptured ? 'background: rgba(230, 180, 100, 0.05);' : ''}">
       <td><strong>${p.patient_id}</strong></td>
-      <td>${p.baby_name}<br><span style="color:var(--text-muted);font-size:0.7rem;">M: ${p.mother_name || "N/A"}</span></td>
+      <td>
+        <strong style="color:var(--text-main); font-size:0.85rem;">${p.baby_name}</strong><br>
+        <span style="color:var(--text-muted); font-size:0.7rem;">M: ${p.mother_name || "N/A"}</span>
+      </td>
       <td><span class="badge badge-tan">${p.nicu_bed || "NICU"}</span></td>
       <td>${p.gestational_age_weeks}w / ${p.birth_weight_grams}g</td>
       <td>${p.postmenstrual_age_weeks}w</td>
-      <td>${p.stage_name} (${p.plus_category})</td>
-      <td><span class="badge ${getUrgencyBadgeClass(p.urgency_code)}">${p.urgency_code}: ${p.urgency_label}</span></td>
-      <td><span style="font-size:0.75rem;color:var(--text-muted);">${p.status}</span></td>
+      <td>${scanStatusHtml}</td>
+      <td>${priorityHtml}</td>
+      <td><span style="font-size:0.75rem; color:var(--text-muted);">${p.status}</span></td>
       <td>
-        <button class="btn-outline" style="font-size:0.7rem;padding:0.3rem 0.5rem;" onclick="selectPatientForScreening('${p.patient_id}')">
-          Screen
+        <button class="btn-primary" style="font-size:0.7rem; padding:0.35rem 0.65rem;" onclick="selectPatientForScreening('${p.patient_id}')">
+          ${isCaptured ? 'Re-Screen' : '📷 Capture Scan'}
         </button>
       </td>
     </tr>
-  `
+  `;
+      }
     )
     .join("");
 }
@@ -447,9 +467,7 @@ function renderSpecialistQueue(patients) {
 
   const queuePatients = patients.filter((p) => 
     p.status === "Submitted to Specialist" || 
-    p.urgency_code === "P0" || 
-    p.urgency_code === "P1" || 
-    p.urgency_code === "P2"
+    (p.has_image_captured && (p.urgency_code === "P0" || p.urgency_code === "P1" || p.urgency_code === "P2"))
   );
 
   queueBody.innerHTML = queuePatients
@@ -476,17 +494,44 @@ function renderSpecialistQueue(patients) {
     .join("");
 }
 
+window.onVisitPatientChange = function (patientId) {
+  activePatientId = patientId;
+  const p = patientsRegistry.find((item) => item.patient_id === patientId);
+  if (!p) return;
+
+  const nameEl = document.getElementById("visitCardBabyName");
+  const metaEl = document.getElementById("visitCardMeta");
+  const statusEl = document.getElementById("visitCardScanStatus");
+  const clinEl = document.getElementById("visitCardClinicalInfo");
+
+  if (nameEl) nameEl.innerText = `Baby ${p.baby_name}`;
+  if (metaEl) metaEl.innerText = `ID: ${p.patient_id} • Mother: ${p.mother_name || "N/A"} • Bed: ${p.nicu_bed || "NICU"}`;
+  if (statusEl) {
+    statusEl.innerHTML = p.has_image_captured
+      ? `<span class="badge badge-sage" style="font-weight:700;">✓ Scan Captured</span>`
+      : `<span class="badge badge-tan" style="background:#fff3cd; color:#856404; font-weight:700; border:1px solid #ffeeba;">📷 Not Captured</span>`;
+  }
+  if (clinEl) {
+    clinEl.innerText = `GA: ${p.gestational_age_weeks} wks | BW: ${p.birth_weight_grams}g | Current PMA: ${p.postmenstrual_age_weeks} wks | Supplemental O2: ${p.supplemental_o2_days || 7} days`;
+  }
+
+  const pmaInput = document.getElementById("visitPma");
+  const wgInput = document.getElementById("visitWg");
+  if (pmaInput && p.postmenstrual_age_weeks) pmaInput.value = p.postmenstrual_age_weeks;
+  if (wgInput && p.weight_gain_g_per_day) wgInput.value = p.weight_gain_g_per_day;
+
+  const preview = document.getElementById("capturePreviewImg");
+  if (preview) {
+    preview.src = p.original_image_base64 || "";
+  }
+};
+
 window.selectPatientForScreening = function (id) {
   activePatientId = id;
   const select = document.getElementById("visitPatientSelect");
   if (select) select.value = id;
 
-  const patient = patientsRegistry.find((p) => p.patient_id === id);
-  if (patient && patient.original_image_base64) {
-    const preview = document.getElementById("capturePreviewImg");
-    if (preview) preview.src = patient.original_image_base64;
-  }
-
+  onVisitPatientChange(id);
   updateCaseSubmissionDetails(id);
   loadPersonalizedPatientAlert(id);
   switchView("visitUploadView");
@@ -573,8 +618,14 @@ async function runAnalysis() {
   const patientId = patientSelect ? patientSelect.value : activePatientId;
   activePatientId = patientId;
 
+  const patient = patientsRegistry.find((p) => p.patient_id === patientId);
+
   formData.append("patient_id", patientId);
-  formData.append("baby_name", "Preterm Infant");
+  formData.append("baby_name", patient ? patient.baby_name : "Infant");
+  formData.append("mother_name", patient ? (patient.mother_name || "") : "");
+  formData.append("parent_phone", patient ? (patient.parent_phone || "+91 98765 43210") : "+91 98765 43210");
+  formData.append("gestational_age_weeks", patient ? (patient.gestational_age_weeks || 28.0) : 28.0);
+  formData.append("birth_weight_grams", patient ? (patient.birth_weight_grams || 1000.0) : 1000.0);
   formData.append("postmenstrual_age_weeks", pma);
   formData.append("weight_gain_g_per_day", wg);
 
@@ -601,28 +652,42 @@ async function runAnalysis() {
   const emptyState = document.getElementById("resultsEmptyState");
   const loader = document.getElementById("mlAnalysisLoader");
   const contentArea = document.getElementById("resultsContentArea");
+  const retakeScreen = document.getElementById("retakeRequiredScreen");
 
   if (emptyState) emptyState.style.display = "none";
   if (contentArea) contentArea.style.display = "none";
+  if (retakeScreen) retakeScreen.style.display = "none";
   if (loader) loader.style.display = "block";
 
   try {
     const res = await fetch("/api/analyze", { method: "POST", body: formData });
     const data = await res.json();
+
+    // QUALITY GATE EVALUATION: IF BLANK, BLURRED, OR UNGRADABLE -> RETAKE REQUIRED (DO NOT CREATE REPORT!)
+    if (data.requires_retake || (data.quality_assessment && !data.quality_assessment.is_gradable)) {
+      renderRetakeRequiredView(data);
+      await loadPatients();
+      return;
+    }
+
+    // AI DETECTED VALID RETINAL IMAGE -> DO NOT ASK TO RETAKE, RENDER FULL COMPARATIVE REPORT
     latestAnalysisData = data;
     renderAnalysisResults(data);
 
-    // Cache images to active patient record
+    // Update cached patient record with captured image and updated priority
     const targetPatient = patientsRegistry.find((p) => p.patient_id === patientId);
     if (targetPatient) {
+      targetPatient.has_image_captured = true;
       targetPatient.original_image_base64 = data.original_image_base64;
       targetPatient.ai_marked_image_base64 = data.ai_marked_image_base64;
       targetPatient.stage_name = data.icrop3_diagnosis.stage_name;
       targetPatient.zone = data.icrop3_diagnosis.zone;
       targetPatient.plus_category = data.icrop3_diagnosis.plus_category;
       targetPatient.urgency_code = data.icrop3_diagnosis.urgency_code;
+      targetPatient.urgency_label = data.icrop3_diagnosis.urgency_label;
     }
 
+    await loadPatients(); // Updates dashboard counters & priority in the list dynamically!
     updateCaseSubmissionDetails(patientId);
     loadPersonalizedPatientAlert(patientId);
   } catch (err) {
@@ -635,6 +700,43 @@ async function runAnalysis() {
     }
   }
 }
+
+function renderRetakeRequiredView(data) {
+  const loader = document.getElementById("mlAnalysisLoader");
+  const contentArea = document.getElementById("resultsContentArea");
+  const emptyState = document.getElementById("resultsEmptyState");
+  const retakeScreen = document.getElementById("retakeRequiredScreen");
+
+  if (loader) loader.style.display = "none";
+  if (contentArea) contentArea.style.display = "none";
+  if (emptyState) emptyState.style.display = "none";
+
+  if (retakeScreen) {
+    retakeScreen.style.display = "block";
+    const reasonEl = document.getElementById("retakeReasonText");
+    const imgEl = document.getElementById("retakeRejectedImg");
+
+    const reason = data.retake_reason || data.quality_assessment?.warnings?.[0] || "Image is ungradable or blank.";
+    if (reasonEl) {
+      reasonEl.innerHTML = `<strong>Quality Defect Detected:</strong> ${reason}<br><span style="font-size:0.75rem; color:var(--text-muted); display:block; margin-top:0.35rem;">Overall Quality Score: ${data.quality_assessment?.overall_score || 0}% • Laplacian Sharpness: ${data.quality_assessment?.blur_score || 0} • Status: ${data.quality_assessment?.status || 'Rejected'}</span>`;
+    }
+    if (imgEl && data.original_image_base64) {
+      imgEl.src = data.original_image_base64;
+    }
+  }
+}
+
+window.triggerScanRetake = function () {
+  const retakeScreen = document.getElementById("retakeRequiredScreen");
+  if (retakeScreen) retakeScreen.style.display = "none";
+
+  const fileIn = document.getElementById("fundusFileInput");
+  if (fileIn) fileIn.value = "";
+  selectedPreset = null;
+
+  switchView("visitUploadView");
+  if (fileIn) fileIn.focus();
+};
 
 function renderAnalysisResults(data) {
   const { quality_assessment, biomarkers, icrop3_diagnosis, longitudinal_progression, scheduler_and_alerts } = data;

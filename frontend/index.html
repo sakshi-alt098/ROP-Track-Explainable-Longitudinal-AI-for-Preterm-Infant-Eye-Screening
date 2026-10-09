@@ -271,9 +271,9 @@
               <th>NICU Bed</th>
               <th>GA / Birth Weight</th>
               <th>PMA</th>
-              <th>ICROP-3 Finding</th>
-              <th>Triage Tier</th>
-              <th>Status</th>
+              <th>Scan Status</th>
+              <th>Priority / Triage</th>
+              <th>Clinical Status</th>
               <th>Action</th>
             </tr>
           </thead>
@@ -370,12 +370,29 @@
             <h2>Select Infant & Scan</h2>
           </div>
           <div class="form-group">
-            <label>Select Registered Patient</label>
-            <select id="visitPatientSelect" class="form-control">
-              <option value="ROP-2026-001">ROP-2026-001 (Sharma - Twin 1)</option>
-              <option value="ROP-2026-002">ROP-2026-002 (Khan)</option>
-              <option value="ROP-2026-003">ROP-2026-003 (Patel)</option>
+            <label>Select Registered Patient *</label>
+            <select id="visitPatientSelect" class="form-control" onchange="onVisitPatientChange(this.value)">
+              <option value="ROP-2026-001">Sharma (Twin 1) (ROP-2026-001)</option>
+              <option value="ROP-2026-002">Khan (ROP-2026-002)</option>
+              <option value="ROP-2026-003">Patel (ROP-2026-003)</option>
+              <option value="ROP-2026-004">Verma (ROP-2026-004) - 📷 Not Captured</option>
             </select>
+          </div>
+
+          <!-- Prominent Selected Patient Information Card -->
+          <div id="visitPatientInfoCard" style="background: var(--warm-beige-panel); border: 1px solid var(--warm-beige-border); border-radius: 0.45rem; padding: 0.85rem; margin-top: 0.5rem; margin-bottom: 0.85rem;">
+            <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 0.5rem;">
+              <div>
+                <strong id="visitCardBabyName" style="font-size: 0.95rem; color: var(--terracotta-brown); display: block;">Baby Sharma (Twin 1)</strong>
+                <span id="visitCardMeta" style="font-size: 0.74rem; color: var(--text-muted); display: block; margin-top: 0.15rem;">ID: ROP-2026-001 • Mother: Pooja Sharma • Bed: NICU-Bed-04</span>
+              </div>
+              <div id="visitCardScanStatus">
+                <span class="badge badge-sage">✓ Scan Captured</span>
+              </div>
+            </div>
+            <div style="font-size: 0.73rem; color: var(--text-muted); margin-top: 0.4rem; padding-top: 0.35rem; border-top: 1px dashed var(--warm-beige-border);" id="visitCardClinicalInfo">
+              GA: 27.5 wks | BW: 920g | Current PMA: 34.2 wks | Supplemental O2: 21 days
+            </div>
           </div>
 
           <div class="form-group">
@@ -447,6 +464,45 @@
         <p style="font-size: 0.82rem; color: var(--text-muted); line-height: 1.5;">
           Applying CLAHE vessel enhancement &bull; Computing Arteriolar Tortuosity &bull; Tracing demarcation ridges in red...
         </p>
+      </div>
+
+      <!-- QUALITY GATE REJECTED / RETAKE REQUIRED SCREEN (SHOWN WHEN SCAN IS BLANK, BLURRED, OR UNGRADABLE) -->
+      <div id="retakeRequiredScreen" class="panel-card ss-scroll scale-in" style="display: none; border-left: 5px solid #d9534f; background: #fffcfc; padding: 2.25rem 1.5rem; text-align: center; margin-bottom: 1.5rem;">
+        <div style="max-width: 620px; margin: 0 auto;">
+          <div style="font-size: 3.5rem; line-height: 1; margin-bottom: 0.75rem;">⚠️</div>
+          <span class="badge" style="background: #f8d7da; color: #721c24; border: 1px solid #f5c6cb; font-size: 0.85rem; font-weight: 700; padding: 0.35rem 0.85rem; margin-bottom: 0.75rem; display: inline-block;">
+            Image Quality Rejected: Retake Required
+          </span>
+          <h2 style="font-size: 1.35rem; color: #721c24; margin: 0.4rem 0 0.5rem 0;">
+            Cannot Generate Clinical Report on Invalid Scan
+          </h2>
+          <p id="retakeReasonText" style="font-size: 0.84rem; color: var(--text-main); line-height: 1.5; margin-bottom: 1.25rem; background: var(--warm-beige-panel); padding: 0.85rem; border-radius: 0.4rem; border: 1px solid var(--warm-beige-border);">
+            The AI Quality Gate examined the uploaded photograph and detected that it is blank, blurred, or missing retinal features. Diagnostic algorithms require clear retinal vascular structures.
+          </p>
+
+          <!-- Rejected Image Viewer -->
+          <div style="max-width: 340px; margin: 0 auto 1.25rem auto; border: 2px solid #d9534f; border-radius: 0.5rem; overflow: hidden; background: #000; position: relative;">
+            <div style="position: absolute; top: 8px; left: 8px; background: rgba(217, 83, 79, 0.92); color: #fff; font-size: 0.7rem; font-weight: 700; padding: 0.2rem 0.6rem; border-radius: 0.25rem;">
+              REJECTED - UNGRADABLE SCAN
+            </div>
+            <img id="retakeRejectedImg" src="" alt="Rejected Scan" style="width: 100%; height: 230px; object-fit: contain; display: block;">
+          </div>
+
+          <!-- Bedside Corrective Steps -->
+          <div style="text-align: left; background: var(--warm-beige-panel); border-radius: 0.4rem; padding: 0.85rem; margin-bottom: 1.5rem; font-size: 0.78rem;">
+            <strong style="color: var(--terracotta-brown);">Bedside Corrective Protocol:</strong>
+            <ul style="margin: 0.35rem 0 0 1.25rem; color: var(--text-muted); line-height: 1.5;">
+              <li>Verify that the infant's pupil is adequately dilated (&ge;4mm aperture).</li>
+              <li>Inspect and clean the fundus camera lens of oil, smudges, or moisture.</li>
+              <li>Stabilize the camera sensor to eliminate hand tremor and motion blur.</li>
+              <li>Re-adjust LED flash intensity to ensure adequate fundus illumination without corneal glare.</li>
+            </ul>
+          </div>
+
+          <button class="btn-primary" style="font-size: 0.95rem; padding: 0.75rem 2rem; background: #c9302c; border-color: #c9302c;" onclick="triggerScanRetake()">
+            📷 Retake Retinal Scan Now &rarr;
+          </button>
+        </div>
       </div>
 
       <!-- POPULATED ANALYSIS CONTENT (HIDDEN UNTIL UPLOADED & ANALYZED) -->

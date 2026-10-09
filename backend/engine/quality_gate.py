@@ -79,30 +79,48 @@ class QualityGate:
         if rms_contrast < self.min_contrast:
             warnings.append(f"Low contrast (RMS: {rms_contrast:.1f} < {self.min_contrast:.0f}).")
 
+        # Check for Blank / Solid / Severely Corrupted Image
+        is_blank = (rms_contrast < 10.0) or (brightness_std < 8.0) or (mean_brightness < 20.0) or (mean_brightness > 242.0) or (tenengrad < 30.0)
+        is_severely_blurred = (laplacian_var < 5.0 and tenengrad < 80.0)
+
+        if is_blank:
+            warnings.insert(0, "Blank or unilluminated image detected. No retinal structures visible.")
+        elif is_severely_blurred:
+            warnings.insert(0, f"Severe motion blur detected (Sharpness: {laplacian_var:.1f}). Retinal vessels cannot be resolved.")
+
         # Compute Normalized Overall Quality Score (0 to 100)
-        blur_norm = np.clip(laplacian_var / 300.0 * 40.0, 0, 40)
-        contrast_norm = np.clip(rms_contrast / 60.0 * 30.0, 0, 30)
-        illum_penalty = 0.0
-        if mean_brightness < 50:
-            illum_penalty += (50 - mean_brightness) * 0.5
-        if mean_brightness > 190:
-            illum_penalty += (mean_brightness - 190) * 0.5
-        illum_score = np.clip(30.0 - illum_penalty - (glare_ratio * 50.0), 0, 30)
-
-        overall_score = float(np.clip(blur_norm + contrast_norm + illum_score, 0.0, 100.0))
-        is_gradable = (overall_score >= 45.0) and (laplacian_var >= 40.0) and (mean_brightness >= 35.0)
-
-        if overall_score >= 75.0:
-            status = "Optimal"
-        elif overall_score >= 50.0:
-            status = "Acceptable"
-        elif overall_score >= 35.0:
-            status = "Suboptimal"
+        if is_blank:
+            overall_score = 5.0
+            is_gradable = False
+            status = "Blank / Ungradable"
         else:
-            status = "Ungradable"
+            # Sharpness score accounts for both Laplacian variance and Sobel gradient energy (vessel structure)
+            sharpness_score = np.clip((laplacian_var / 200.0 * 20.0) + (tenengrad / 2000.0 * 20.0), 0, 40)
+            contrast_norm = np.clip(rms_contrast / 60.0 * 30.0, 0, 30)
+            illum_penalty = 0.0
+            if mean_brightness < 45:
+                illum_penalty += (45 - mean_brightness) * 0.5
+            if mean_brightness > 195:
+                illum_penalty += (mean_brightness - 195) * 0.5
+            illum_score = np.clip(30.0 - illum_penalty - (glare_ratio * 50.0), 0, 30)
+
+            overall_score = float(np.clip(sharpness_score + contrast_norm + illum_score, 0.0, 100.0))
+            is_gradable = (overall_score >= 35.0) and (not is_severely_blurred) and (mean_brightness >= 22.0) and (rms_contrast >= 12.0)
+
+            if overall_score >= 70.0:
+                status = "Optimal"
+            elif overall_score >= 45.0:
+                status = "Acceptable"
+            elif overall_score >= 35.0:
+                status = "Suboptimal"
+            else:
+                status = "Ungradable"
+
+        requires_retake = not is_gradable
 
         return {
             "is_gradable": bool(is_gradable),
+            "requires_retake": bool(requires_retake),
             "overall_score": round(overall_score, 1),
             "blur_score": round(float(laplacian_var), 1),
             "tenengrad_score": round(float(tenengrad), 1),
