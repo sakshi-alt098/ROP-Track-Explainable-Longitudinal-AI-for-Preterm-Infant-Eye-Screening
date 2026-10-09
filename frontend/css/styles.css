@@ -614,21 +614,48 @@ header {
   position: relative;
   background-color: var(--neu-bg);
   border-radius: 0.85rem;
-  box-shadow: inset 4px 4px 8px var(--neu-inset-dark), inset -4px -4px 8px var(--neu-inset-light);
+  border: 1.5px solid transparent;
+  box-shadow: inset 3px 3px 6px var(--neu-inset-dark), inset -3px -3px 6px var(--neu-inset-light);
   display: flex;
   align-items: center;
   padding: 0 1rem;
-  transition: all 0.2s ease;
+  transition: all 0.25s ease;
+}
+
+.input-group.neu-input:focus-within {
+  border-color: var(--sage-green) !important;
+  background-color: #FAF8F5 !important;
+  box-shadow: 0 0 0 3px rgba(115, 142, 122, 0.2), inset 1px 1px 3px var(--neu-inset-dark) !important;
 }
 
 .input-group.neu-input input {
   width: 100%;
-  background: transparent;
-  border: none;
-  outline: none;
+  background: transparent !important;
+  background-color: transparent !important;
+  border: none !important;
+  outline: none !important;
+  box-shadow: none !important;
   padding: 1.1rem 0.5rem 0.5rem 0;
   font-size: 0.85rem;
-  color: var(--text-main);
+  color: var(--text-main) !important;
+  caret-color: var(--terracotta-brown) !important;
+}
+
+/* Eliminate weird browser yellow/blue autofill and selection highlights */
+.input-group.neu-input input:-webkit-autofill,
+.input-group.neu-input input:-webkit-autofill:hover, 
+.input-group.neu-input input:-webkit-autofill:focus,
+.input-group.neu-input input:-webkit-autofill:active {
+  -webkit-box-shadow: 0 0 0 1000px #FAF8F5 inset !important;
+  -webkit-text-fill-color: var(--text-main) !important;
+  caret-color: var(--terracotta-brown) !important;
+  transition: background-color 5000s ease-in-out 0s;
+  border-radius: 0.5rem;
+}
+
+.input-group.neu-input input::selection {
+  background-color: rgba(184, 80, 58, 0.25) !important;
+  color: var(--text-main) !important;
 }
 
 .input-group.neu-input label {

@@ -79,20 +79,64 @@ class QualityGate:
         if rms_contrast < self.min_contrast:
             warnings.append(f"Low contrast (RMS: {rms_contrast:.1f} < {self.min_contrast:.0f}).")
 
+        # 7. Check for Non-Retinal Image / Invalid Spectrum / Monochromatic Graphic
+        b_chan, g_chan, r_chan = cv2.split(resized.astype(np.float32))
+        h_chan, s_chan = hsv[:, :, 0], hsv[:, :, 1]
+
+        illuminated = (v_channel > 25)
+        total_illum = int(np.sum(illuminated))
+        total_pixels = resized.shape[0] * resized.shape[1]
+
+        is_non_retinal = False
+        non_retinal_reason = ""
+
+        if total_illum < (total_pixels * 0.10):
+            is_non_retinal = True
+            non_retinal_reason = "Image is completely dark or unilluminated. Retake required."
+        else:
+            # Check for Monochromatic / Greyscale Graphics (placeholder icons, B&W documents, screenshots)
+            ch_diff = float(np.mean(np.abs(r_chan - g_chan) + np.abs(g_chan - b_chan) + np.abs(r_chan - b_chan), where=illuminated))
+            mean_sat = float(np.mean(s_chan[illuminated]))
+            if ch_diff < 12.0 or mean_sat < 12.0:
+                is_non_retinal = True
+                non_retinal_reason = "Not a retinal fundus image: Monochromatic/greyscale graphic detected. Please capture a genuine infant retinal scan."
+
+            # Retinal Tissue Hue & Saturation (Warm red/orange/amber spectrum: H <= 32 or H >= 145 and S >= 20)
+            retinal_pixels = illuminated & (((h_chan <= 32) | (h_chan >= 145)) & (s_chan >= 20))
+            retinal_ratio = float(np.sum(retinal_pixels) / total_illum)
+
+            # Red Channel Dominance (Vascularized retinal tissue has red dominance over blue)
+            red_dominant = illuminated & (r_chan > (b_chan * 1.08)) & (r_chan > 30.0)
+            red_dom_ratio = float(np.sum(red_dominant) / total_illum)
+
+            # Unnatural Cool Hues (Cyan / Blue / Pure Green: H between 40 and 140 with saturation > 35)
+            unnatural_cool = illuminated & ((h_chan > 40) & (h_chan < 140) & (s_chan > 35))
+            unnatural_ratio = float(np.sum(unnatural_cool) / total_illum)
+            if not is_non_retinal and unnatural_ratio > 0.65:
+                is_non_retinal = True
+                non_retinal_reason = f"Not a retinal fundus image: Unnatural color spectrum ({unnatural_ratio*100:.1f}% cool tones). Please upload a retinal fundus image."
+
+            # Must exhibit sufficient retinal vascular or fundus tissue color
+            if not is_non_retinal and (retinal_ratio < 0.18) and (red_dom_ratio < 0.20):
+                is_non_retinal = True
+                non_retinal_reason = "Not a retinal fundus image: No retinal tissue or vasculature detected. Please retake scan."
+
         # Check for Blank / Solid / Severely Corrupted Image
         is_blank = (rms_contrast < 10.0) or (brightness_std < 8.0) or (mean_brightness < 20.0) or (mean_brightness > 242.0) or (tenengrad < 30.0)
         is_severely_blurred = (laplacian_var < 5.0 and tenengrad < 80.0)
 
-        if is_blank:
+        if is_non_retinal:
+            warnings.insert(0, non_retinal_reason)
+        elif is_blank:
             warnings.insert(0, "Blank or unilluminated image detected. No retinal structures visible.")
         elif is_severely_blurred:
             warnings.insert(0, f"Severe motion blur detected (Sharpness: {laplacian_var:.1f}). Retinal vessels cannot be resolved.")
 
         # Compute Normalized Overall Quality Score (0 to 100)
-        if is_blank:
+        if is_non_retinal or is_blank:
             overall_score = 5.0
             is_gradable = False
-            status = "Blank / Ungradable"
+            status = "Non-Retinal / Ungradable" if is_non_retinal else "Blank / Ungradable"
         else:
             # Sharpness score accounts for both Laplacian variance and Sobel gradient energy (vessel structure)
             sharpness_score = np.clip((laplacian_var / 200.0 * 20.0) + (tenengrad / 2000.0 * 20.0), 0, 40)

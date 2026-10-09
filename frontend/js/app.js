@@ -668,8 +668,8 @@ async function runAnalysis() {
     const res = await fetch("/api/analyze", { method: "POST", body: formData });
     const data = await res.json();
 
-    // QUALITY GATE EVALUATION: IF BLANK, BLURRED, OR UNGRADABLE -> RETAKE REQUIRED (DO NOT CREATE REPORT!)
-    if (data.requires_retake || (data.quality_assessment && !data.quality_assessment.is_gradable)) {
+    // QUALITY GATE EVALUATION: IF BLANK, BLURRED, UNGRADABLE, OR NON-RETINAL -> RETAKE REQUIRED (DO NOT CREATE REPORT!)
+    if (data.requires_retake || data.status === "retake_required" || (data.quality_assessment && !data.quality_assessment.is_gradable)) {
       renderRetakeRequiredView(data);
       await loadPatients();
       return;

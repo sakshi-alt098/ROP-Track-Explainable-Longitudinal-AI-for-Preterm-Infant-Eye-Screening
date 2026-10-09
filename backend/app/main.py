@@ -298,12 +298,13 @@ async def analyze_fundus(
     _, orig_buf = cv2.imencode(".jpg", image_bgr, [int(cv2.IMWRITE_JPEG_QUALITY), 90])
     orig_base64 = "data:image/jpeg;base64," + base64.b64encode(orig_buf).decode("utf-8")
 
-    # IF IMAGE IS UNGRADABLE, BLURRED, OR BLANK: REQUIRE RETAKE INSTEAD OF CREATING REPORT
+    # IF IMAGE IS UNGRADABLE, BLURRED, BLANK, OR NON-RETINAL: REQUIRE RETAKE INSTEAD OF CREATING REPORT
     if quality_result.get("requires_retake", False) or not quality_result.get("is_gradable", True):
-        retake_reason = quality_result["warnings"][0] if quality_result.get("warnings") else "Image is ungradable or blank."
+        retake_reason = quality_result["warnings"][0] if quality_result.get("warnings") else "Image is not a valid retinal scan or is ungradable."
+        quality_status = quality_result.get("status", "Ungradable Scan")
         for p in PATIENTS:
             if p["patient_id"] == patient_id:
-                p["status"] = "Retake Required (Ungradable Scan)"
+                p["status"] = f"Retake Required ({quality_status})"
                 p["has_image_captured"] = False
                 p["last_examined"] = "Attempted Just Now"
 
@@ -315,7 +316,7 @@ async def analyze_fundus(
             "original_image_base64": orig_base64,
             "quality_assessment": quality_result,
             "retake_reason": retake_reason,
-            "message": "Image Quality Rejected: Retake Required"
+            "message": f"Scan Rejected: {retake_reason}"
         }
 
     # AI SEES RETINA AND VALID RETINAL VASCULATURE - PROCEED WITH FULL REPORT
