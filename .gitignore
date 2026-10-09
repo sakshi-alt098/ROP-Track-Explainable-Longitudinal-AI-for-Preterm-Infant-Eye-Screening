@@ -1,0 +1,56 @@
+# Environment variables and Secrets (Strictly protected)
+.env
+.env.*
+!.env.example
+*.env
+*.key
+*.pem
+*.cert
+*.crt
+secrets/
+credentials.json
+auth_tokens.json
+
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Environments
+.venv
+env/
+venv/
+ENV/
+env.bak/
+venv.bak/
+
+# Data and Model Weights (Never commit patient data or large checkpoints)
+data/
+datasets/
+checkpoints/
+weights/
+*.pth
+*.pt
+*.onnx
+*.tflite
+*.h5
+
+# Node / Frontend
+node_modules/
+.next/
+out/
+build/
+dist/
+
+# Logs & Storage
+*.log
+logs/
+storage/
+media/
+reports/generated/
+
+# OS / IDE
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
