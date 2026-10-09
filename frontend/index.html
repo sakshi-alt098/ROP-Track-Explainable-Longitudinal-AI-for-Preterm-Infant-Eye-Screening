@@ -1,0 +1,771 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ROP-Sahayak: Hospital Tele-ROP Platform</title>
+  <link rel="stylesheet" href="/static/css/styles.css">
+</head>
+<body>
+
+  <!-- FULLSCREEN INTRO VIDEO SEQUENCE (PLAYS BEFORE LOGIN, THEN FADES AWAY COMPLETELY) -->
+  <div id="introSplash" class="intro-splash-overlay">
+    <div class="intro-header-banner">
+      <h1 class="intro-title">Welcome to Drushti Scan</h1>
+      <p class="intro-subtitle">AI-Assisted Retinopathy of Prematurity Screening & Pediatric Retinal Care Platform</p>
+    </div>
+
+    <!-- Huge Rectangular Video Frame -->
+    <div class="intro-video-container">
+      <div class="intro-scan-beam"></div>
+      <video class="intro-eye-video" id="introEyeVideo" autoplay loop muted playsinline>
+        <source src="/static/assets/rop_eye_blink_brown_web.mp4" type="video/mp4">
+      </video>
+    </div>
+
+    <div class="intro-progress-bar">
+      <div class="intro-progress-fill" id="introProgressFill"></div>
+    </div>
+
+    <button class="btn-primary" style="margin-top: 0.5rem; padding: 0.6rem 1.6rem; font-size: 0.88rem;" onclick="dismissIntro()">
+      Enter Hospital Portal &rarr;
+    </button>
+  </div>
+
+  <!-- Offline / Brainstorming Mode Banner -->
+  <div class="offline-banner">
+    <div>
+      <strong>Offline-Ready NICU Mode:</strong> Deterministic biomarker engine active. Local analysis available with zero cloud dependency.
+    </div>
+    <div style="font-size:0.75rem;">
+      <a href="javascript:void(0);" onclick="switchView('brainstormingView')" style="color:var(--golden-tan-dark); text-decoration:underline;">Brainstorming Notes</a> | <a href="/privacy" style="color:var(--golden-tan-dark); text-decoration:underline;">Privacy Policy</a>
+    </div>
+  </div>
+
+  <!-- Main Top Header -->
+  <header>
+    <div>
+      <h1 class="brand-title">ROP-Sahayak</h1>
+      <p class="brand-subtitle">Hospital Tele-Screening, Remote Specialist Review & Longitudinal Care Platform</p>
+    </div>
+
+    <!-- Screen 1: Role Switcher / Authentication Status -->
+    <div style="display: flex; align-items: center; gap: 0.75rem;">
+      <span style="font-size: 0.75rem; color: var(--text-muted);">Active Portal:</span>
+      <div class="role-nav">
+        <button class="role-tab active" data-role="login" onclick="switchView('loginView')">Hospital Login</button>
+        <button class="role-tab" data-role="nicu" onclick="setRole('nicu')">NICU Staff</button>
+        <button class="role-tab" data-role="specialist" onclick="setRole('specialist')">Specialist Reviewer</button>
+        <button class="role-tab" data-role="admin" onclick="setRole('admin')">Admin & Billing</button>
+      </div>
+    </div>
+  </header>
+
+  <!-- Navigation Bar covering the Architecture Screens -->
+  <nav class="subnav-bar">
+    <button class="screen-link active" onclick="switchView('loginView')">0. Hospital Login</button>
+    <button class="screen-link" onclick="switchView('nicuDashboardView')">1. NICU Dashboard</button>
+    <button class="screen-link" onclick="switchView('patientRegView')">2. Patient Registration</button>
+    <button class="screen-link" onclick="switchView('visitUploadView')">3. Visit + Image Upload</button>
+    <button class="screen-link" onclick="switchView('analysisResultsView')">4. Quality & Biomarkers</button>
+    <button class="screen-link" onclick="switchView('caseSubmitView')">5. Case Submission</button>
+    <button class="screen-link" onclick="switchView('specialistQueueView')">6. Specialist Queue</button>
+    <button class="screen-link" onclick="switchView('specialistReviewView')">7. Specialist Case Review</button>
+    <button class="screen-link" onclick="switchView('patientTimelineView')">8. Patient Timeline</button>
+    <button class="screen-link" onclick="switchView('followupTrackerView')">9. Follow-up Tracker</button>
+    <button class="screen-link" onclick="switchView('costEstimatorView')">10. Cost Estimator</button>
+    <button class="screen-link" onclick="switchView('paymentView')">11. Simulated Payment</button>
+  </nav>
+
+  <!-- MAIN APPLICATION CONTENT VIEWS -->
+  <main class="app-container">
+
+    <!-- SCREEN 1: NEUMORPHIC HOSPITAL LOGIN (NO VIDEO VISIBLE, CARD HAS TOP-TO-BOTTOM SCAN ANIMATION) -->
+    <section id="loginView" class="view-section active">
+      <div class="login-container">
+        <div class="login-card ss-scroll scale-in">
+          <!-- Top-to-Bottom Holographic Laser Scan Line -->
+          <div class="hologram-scan-line"></div>
+
+          <div class="login-header">
+            <span class="hospital-tag">Authorized Hospital & NICU Personnel Only</span>
+            <div class="neu-icon">
+              <div class="icon-inner">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
+                  <circle cx="12" cy="7" r="4"/>
+                </svg>
+              </div>
+            </div>
+            <h2>Hospital Portal Login</h2>
+            <p>Sign in with institutional credentials to access NICU records</p>
+          </div>
+          
+          <form class="login-form" id="loginForm" novalidate>
+            <div class="form-group">
+              <div class="input-group neu-input">
+                <input type="email" id="email" name="email" required autocomplete="email" placeholder=" " value="doctor.nicu@aiims.edu">
+                <label for="email">Institutional email address</label>
+                <div class="input-icon">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/>
+                    <polyline points="22,6 12,13 2,6"/>
+                  </svg>
+                </div>
+              </div>
+              <span class="error-message" id="emailError"></span>
+            </div>
+
+            <div class="form-group">
+              <div class="input-group neu-input password-group">
+                <input type="password" id="password" name="password" required autocomplete="current-password" placeholder=" " value="NicuCare2026!">
+                <label for="password">Hospital Security PIN / Password</label>
+                <div class="input-icon">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
+                    <path d="M7 11V7a5 5 0 0110 0v4"/>
+                  </svg>
+                </div>
+                <button type="button" class="password-toggle neu-toggle" id="passwordToggle" aria-label="Toggle password visibility">
+                  <svg class="eye-open" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
+                    <circle cx="12" cy="12" r="3"/>
+                  </svg>
+                  <svg class="eye-closed" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/>
+                    <line x1="1" y1="1" x2="23" y2="23"/>
+                  </svg>
+                </button>
+              </div>
+              <span class="error-message" id="passwordError"></span>
+            </div>
+
+            <div class="form-options">
+              <div class="remember-wrapper">
+                <input type="checkbox" id="remember" name="remember" checked>
+                <label for="remember" class="checkbox-label">
+                  <div class="neu-checkbox">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3">
+                      <polyline points="20 6 9 17 4 12"/>
+                    </svg>
+                  </div>
+                  Keep session authenticated
+                </label>
+              </div>
+              <a href="#" class="forgot-link">Reset PIN?</a>
+            </div>
+
+            <button type="submit" class="neu-button login-btn" id="loginSubmitBtn">
+              <span class="btn-text">Sign In to Hospital Portal</span>
+              <div class="btn-loader">
+                <div class="neu-spinner"></div>
+              </div>
+            </button>
+          </form>
+
+          <div class="divider">
+            <div class="divider-line"></div>
+            <span>or sign in via verified network</span>
+            <div class="divider-line"></div>
+          </div>
+
+          <div class="social-login">
+            <button type="button" class="social-btn neu-social" title="National Health Mission SSO" onclick="quickLogin('AIIMS Regional NICU Centre')">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/>
+              </svg>
+            </button>
+            <button type="button" class="social-btn neu-social" title="Ayushman Bharat Digital Health SSO" onclick="quickLogin('District Civil Hospital')">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
+                <line x1="12" y1="8" x2="12" y2="16"/>
+                <line x1="8" y1="12" x2="16" y2="12"/>
+              </svg>
+            </button>
+          </div>
+
+          <div class="signup-link">
+            <p>New Hospital/NICU Center? <a href="javascript:void(0);" onclick="alert('Contact the State Health Directorate to onboard your NICU facility.')">Request Node Enrollment</a></p>
+          </div>
+
+          <div class="success-message" id="successMessage">
+            <div class="success-icon neu-icon">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3">
+                <polyline points="20 6 9 17 4 12"/>
+              </svg>
+            </div>
+            <h3>Authentication Successful!</h3>
+            <p>Redirecting to NICU Triage Dashboard...</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- SCREEN 2: NICU DASHBOARD -->
+    <section id="nicuDashboardView" class="view-section">
+      <div class="grid-cols-3 ss-scroll scale-in" style="margin-bottom: 1.25rem;">
+        <div class="panel-card" style="border-left: 4px solid var(--terracotta-brown);">
+          <div class="card-header">
+            <h2>Urgent Triage (P0/P1)</h2>
+            <span class="badge badge-terracotta">Immediate Action</span>
+          </div>
+          <div style="font-size: 1.8rem; font-weight: 700; color: var(--terracotta-brown);" id="statUrgentCount">1</div>
+          <p style="font-size: 0.75rem; color: var(--text-muted); margin-top: 0.25rem;">Patients requiring laser/anti-VEGF review within 48h</p>
+        </div>
+
+        <div class="panel-card" style="border-left: 4px solid var(--golden-tan);">
+          <div class="card-header">
+            <h2>Priority Triage (P2)</h2>
+            <span class="badge badge-tan">3-5 Days Re-exam</span>
+          </div>
+          <div style="font-size: 1.8rem; font-weight: 700; color: var(--golden-tan-dark);" id="statPriorityCount">1</div>
+          <p style="font-size: 0.75rem; color: var(--text-muted); margin-top: 0.25rem;">Pre-plus / Stage 2 close monitoring</p>
+        </div>
+
+        <div class="panel-card" style="border-left: 4px solid var(--sage-green);">
+          <div class="card-header">
+            <h2>Routine & Immature (P3)</h2>
+            <span class="badge badge-sage">Stable</span>
+          </div>
+          <div style="font-size: 1.8rem; font-weight: 700; color: var(--sage-green-dark);" id="statRoutineCount">1</div>
+          <p style="font-size: 0.75rem; color: var(--text-muted); margin-top: 0.25rem;">Standard 1-2 week serial screening interval</p>
+        </div>
+      </div>
+
+      <div class="panel-card ss-scroll scale-in">
+        <div class="card-header">
+          <h2>Active NICU Patient Registry</h2>
+          <button class="btn-sage" onclick="switchView('patientRegView')">+ Register New Preterm Infant</button>
+        </div>
+        <table class="table-custom">
+          <thead>
+            <tr>
+              <th>Patient ID</th>
+              <th>Baby Name</th>
+              <th>NICU Bed</th>
+              <th>GA / Birth Weight</th>
+              <th>PMA</th>
+              <th>ICROP-3 Finding</th>
+              <th>Triage Tier</th>
+              <th>Status</th>
+              <th>Action</th>
+            </tr>
+          </thead>
+          <tbody id="nicuTableBody">
+            <!-- Dynamically populated -->
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- SCREEN 3: PATIENT REGISTRATION -->
+    <section id="patientRegView" class="view-section">
+      <div class="panel-card ss-scroll scale-in" style="max-width: 720px; margin: 0 auto;">
+        <div class="card-header">
+          <h2>Patient Registration: Preterm Infant Profile</h2>
+          <span class="badge badge-sage">NICU Admission</span>
+        </div>
+        <form id="patientRegForm">
+          <div class="grid-cols-2">
+            <div class="form-group">
+              <label>Baby Name / Surname *</label>
+              <input type="text" id="regBabyName" class="form-control" placeholder="e.g. Gupta" required>
+            </div>
+            <div class="form-group">
+              <label>Mother / Guardian Name *</label>
+              <input type="text" id="regMotherName" class="form-control" placeholder="e.g. Sunita Gupta" required>
+            </div>
+          </div>
+
+          <div class="grid-cols-2">
+            <div class="form-group">
+              <label>Parent Contact Phone (SMS/WhatsApp) *</label>
+              <input type="text" id="regParentPhone" class="form-control" value="+91 98765 00000" required>
+            </div>
+            <div class="form-group">
+              <label>NICU Bed Number *</label>
+              <input type="text" id="regNicuBed" class="form-control" placeholder="e.g. NICU-Bed-07" required>
+            </div>
+          </div>
+
+          <div class="grid-cols-3">
+            <div class="form-group">
+              <label>Date of Birth *</label>
+              <input type="date" id="regDob" class="form-control" value="2026-08-20" required>
+            </div>
+            <div class="form-group">
+              <label>Gestational Age (weeks) *</label>
+              <input type="number" id="regGa" class="form-control" value="28.0" step="0.1" required>
+            </div>
+            <div class="form-group">
+              <label>Birth Weight (grams) *</label>
+              <input type="number" id="regBw" class="form-control" value="1020" step="10" required>
+            </div>
+          </div>
+
+          <div class="grid-cols-2">
+            <div class="form-group">
+              <label>Weight Gain Rate (g/day)</label>
+              <input type="number" id="regWg" class="form-control" value="12.0" step="0.5">
+            </div>
+            <div class="form-group">
+              <label>Supplemental Oxygen (Days)</label>
+              <input type="number" id="regO2" class="form-control" value="14" step="1">
+            </div>
+          </div>
+
+          <div style="display: flex; justify-content: flex-end; gap: 0.75rem; margin-top: 1rem;">
+            <button type="button" class="btn-outline" onclick="switchView('nicuDashboardView')">Cancel</button>
+            <button type="submit" class="btn-primary">Save Infant Record & Proceed to Screening</button>
+          </div>
+        </form>
+      </div>
+    </section>
+
+    <!-- SCREEN 4: VISIT + IMAGE UPLOAD -->
+    <section id="visitUploadView" class="view-section">
+      <div class="grid-sidebar ss-scroll scale-in">
+        <div class="panel-card">
+          <div class="card-header">
+            <h2>Select Infant & Scan</h2>
+          </div>
+          <div class="form-group">
+            <label>Select Registered Patient</label>
+            <select id="visitPatientSelect" class="form-control">
+              <option value="ROP-2026-001">ROP-2026-001 (Sharma - Twin 1)</option>
+              <option value="ROP-2026-002">ROP-2026-002 (Khan)</option>
+              <option value="ROP-2026-003">ROP-2026-003 (Patel)</option>
+            </select>
+          </div>
+
+          <div class="form-group">
+            <label>Quick Benchmark Case Preset</label>
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.4rem; margin-bottom: 0.5rem;">
+              <button class="btn-outline" style="font-size:0.7rem; padding:0.4rem;" onclick="setPresetAndRun('type1_stage3')">Type 1 Stage 3 Plus</button>
+              <button class="btn-outline" style="font-size:0.7rem; padding:0.4rem;" onclick="setPresetAndRun('arop')">Aggressive ROP</button>
+              <button class="btn-outline" style="font-size:0.7rem; padding:0.4rem;" onclick="setPresetAndRun('stage2_preplus')">Stage 2 Pre-Plus</button>
+              <button class="btn-outline" style="font-size:0.7rem; padding:0.4rem;" onclick="setPresetAndRun('normal_immature')">Immature Normal</button>
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label>Or Upload Fundus Photograph</label>
+            <input type="file" id="fundusFileInput" class="form-control" accept="image/*">
+          </div>
+
+          <div class="grid-cols-2">
+            <div class="form-group">
+              <label>Current PMA (wks)</label>
+              <input type="number" id="visitPma" class="form-control" value="34.0" step="0.1">
+            </div>
+            <div class="form-group">
+              <label>Weight Gain (g/day)</label>
+              <input type="number" id="visitWg" class="form-control" value="10.0" step="0.5">
+            </div>
+          </div>
+
+          <button id="runAnalysisBtn" class="btn-primary" style="width: 100%; margin-top: 0.5rem;">Run Image Quality & Biomarker Engine</button>
+        </div>
+
+        <div class="panel-card">
+          <div class="card-header">
+            <h2>Live Fundus Capture Preview</h2>
+            <span class="badge badge-tan">Field of View</span>
+          </div>
+          <div class="fundus-viewer">
+            <div class="fundus-tag">Current Scan</div>
+            <img id="capturePreviewImg" src="" alt="Capture Preview">
+          </div>
+          <p style="font-size: 0.75rem; color: var(--text-muted); margin-top: 0.75rem; text-align: center;">
+            Supports single-view or multi-view sector captures (Central, Temporal, Nasal, Superior, Inferior).
+          </p>
+        </div>
+      </div>
+    </section>
+
+    <!-- SCREEN 5: QUALITY + ANALYSIS RESULTS -->
+    <section id="analysisResultsView" class="view-section">
+      <div class="panel-card ss-scroll scale-in" style="border-left: 4px solid var(--terracotta-brown);">
+        <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.75rem;">
+          <div>
+            <span id="resUrgencyBadge" class="badge badge-terracotta">P1: Type 1 ROP (High Urgency)</span>
+            <h2 id="resActionHeading" style="font-size: 1rem; color: var(--terracotta-brown); margin-top: 0.35rem;">
+              Treatment Recommended Within 72 Hours
+            </h2>
+          </div>
+          <div style="text-align: right;">
+            <div style="font-size: 0.75rem; color: var(--text-muted);">
+              Quality Gate: <strong id="resQualityScore" style="color: var(--sage-green-dark);">Optimal (88%)</strong>
+            </div>
+            <div id="resQualityWarning" style="font-size: 0.7rem; color: var(--text-muted); margin-top: 0.2rem;">
+              Laplacian & contrast within clinical thresholds.
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="grid-cols-2 ss-scroll scale-in">
+        <!-- Retinal Biomarker Segmentation Overlay -->
+        <div class="panel-card">
+          <div class="card-header">
+            <h2>Quantitative Biomarker Segmentation</h2>
+            <span class="badge badge-sage">Vessel Overlay</span>
+          </div>
+          <div class="fundus-viewer">
+            <div class="fundus-tag">Vessels (Sage) • Disc & Zones (Tan/Terracotta)</div>
+            <img id="resOverlayImg" src="" alt="Vessel Segmentation Overlay">
+          </div>
+        </div>
+
+        <!-- Quantitative Biomarkers and ICROP-3 Card -->
+        <div class="panel-card">
+          <div class="card-header">
+            <h2>ICROP-3 Diagnostic Summary</h2>
+            <span class="badge badge-tan" id="resZoneBadge">Zone I</span>
+          </div>
+          
+          <div style="margin-bottom: 0.75rem;">
+            <div style="font-size: 0.72rem; color: var(--text-muted); font-weight: 600;">STAGE & MORPHOLOGY</div>
+            <div id="resStageName" style="font-size: 1.05rem; font-weight: 700; color: var(--terracotta-brown); margin-top: 0.15rem;">
+              Stage 3 (Extraretinal Neovascular Proliferation)
+            </div>
+            <div id="resStageDesc" style="font-size: 0.75rem; color: var(--text-muted); margin-top: 0.2rem;">
+              Fibrovascular tissue protruding into vitreous with vascular shunts.
+            </div>
+          </div>
+
+          <div style="margin-bottom: 1rem;">
+            <div style="display: flex; justify-content: space-between; font-size: 0.75rem;">
+              <span style="font-weight: 600; color: var(--text-muted);">Continuous Plus Spectrum</span>
+              <span id="resPlusText" style="font-weight: 700; color: var(--terracotta-brown);">Plus Disease (0.780)</span>
+            </div>
+            <div class="meter-track">
+              <div id="resPlusMeter" class="meter-fill" style="width: 78%; background-color: var(--terracotta-brown);"></div>
+            </div>
+          </div>
+
+          <div class="grid-cols-2" style="gap: 0.5rem;">
+            <div style="background: var(--warm-beige-panel); padding: 0.5rem 0.75rem; border-radius: 0.35rem; border-left: 3px solid var(--sage-green);">
+              <div style="font-size: 0.68rem; color: var(--text-muted);">Tortuosity Index (ATI)</div>
+              <div id="resAtiVal" style="font-size: 1.15rem; font-weight: 700; color: var(--text-main);">1.340</div>
+              <div style="font-size: 0.65rem; color: var(--text-muted);">Normal: 1.00 - 1.12</div>
+            </div>
+            <div style="background: var(--warm-beige-panel); padding: 0.5rem 0.75rem; border-radius: 0.35rem; border-left: 3px solid var(--terracotta-brown);">
+              <div style="font-size: 0.68rem; color: var(--text-muted);">Dilation Index (VDI)</div>
+              <div id="resVdiVal" style="font-size: 1.15rem; font-weight: 700; color: var(--text-main);">8.20</div>
+              <div style="font-size: 0.65rem; color: var(--text-muted);">Normal: 3.0 - 5.0</div>
+            </div>
+          </div>
+
+          <div style="margin-top: 1rem; display: flex; gap: 0.5rem;">
+            <button class="btn-primary" onclick="switchView('caseSubmitView')">Package & Submit to Specialist</button>
+            <button class="btn-sage" onclick="switchView('patientTimelineView')">View Progression Timeline</button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- SCREEN 6: CASE SUBMISSION -->
+    <section id="caseSubmitView" class="view-section">
+      <div class="panel-card ss-scroll scale-in" style="max-width: 720px; margin: 0 auto;">
+        <div class="card-header">
+          <h2>Tele-Ophthalmology Case Submission</h2>
+          <span class="badge badge-terracotta">Tele-Dispatch</span>
+        </div>
+        <p style="font-size: 0.8rem; color: var(--text-muted); margin-bottom: 1rem;">
+          Transmit encrypted clinical summary, quantitative biomarker indices, and fundus captures to on-call pediatric ophthalmologist.
+        </p>
+        
+        <div class="form-group">
+          <label>Assign Specialist</label>
+          <select id="submitSpecialistSelect" class="form-control">
+            <option>Dr. Ananya Roy, MD (Pediatric Retina Specialist - On Duty)</option>
+            <option>Dr. V. Ramanathan, FRCOphth (Retina Consultant)</option>
+          </select>
+        </div>
+
+        <div class="form-group">
+          <label>NICU Nurse / Resident Clinical Notes</label>
+          <textarea id="submitCaseNotes" class="form-control" rows="3" placeholder="Add specific bedside observations (e.g. apnea episodes, recent blood transfusions)...">Patient showing rapid vessel dilation. Requesting immediate confirmation of Zone I Stage 3 Plus diagnosis.</textarea>
+        </div>
+
+        <div style="background: var(--warm-beige-panel); border: 1px solid var(--warm-beige-border); border-radius: 0.35rem; padding: 0.75rem; margin-bottom: 1rem;">
+          <div style="font-size: 0.75rem; font-weight: 600; color: var(--terracotta-brown);">Included In Encrypted Bundle:</div>
+          <ul style="font-size: 0.75rem; color: var(--text-muted); margin-left: 1.25rem; margin-top: 0.35rem; line-height: 1.5;">
+            <li>De-identified Patient Demographics & Systemic Factors (GA 27.5 wks, BW 920g)</li>
+            <li>Raw and CLAHE-Segmented Retinal Fundus Imagery</li>
+            <li>Quantitative Biomarkers (ATI 1.340, VDI 8.20, Avascular Area 46%)</li>
+            <li>Deterministic ICROP-3 Stage & Continuous Plus Index</li>
+          </ul>
+        </div>
+
+        <div style="display: flex; justify-content: flex-end; gap: 0.75rem;">
+          <button class="btn-outline" onclick="switchView('analysisResultsView')">Back to Analysis</button>
+          <button class="btn-primary" onclick="submitCaseToDoctor()">Dispatch to Specialist Queue</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- SCREEN 7: SPECIALIST QUEUE -->
+    <section id="specialistQueueView" class="view-section">
+      <div class="panel-card ss-scroll scale-in">
+        <div class="card-header">
+          <h2>Specialist Tele-Triage Review Queue</h2>
+          <span class="badge badge-sage">Dr. Ananya Roy, MD</span>
+        </div>
+        <table class="table-custom">
+          <thead>
+            <tr>
+              <th>Queue Tier</th>
+              <th>Patient ID</th>
+              <th>Center / NICU</th>
+              <th>PMA / GA</th>
+              <th>AI ICROP-3 Finding</th>
+              <th>Biomarkers</th>
+              <th>Action</th>
+            </tr>
+          </thead>
+          <tbody id="specialistQueueBody">
+            <!-- Dynamically populated -->
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- SCREEN 8: SPECIALIST CASE REVIEW -->
+    <section id="specialistReviewView" class="view-section">
+      <div class="grid-sidebar ss-scroll scale-in">
+        <div class="panel-card">
+          <div class="card-header">
+            <h2>Specialist Clinical Decision</h2>
+            <span class="badge badge-terracotta">Sign-Off</span>
+          </div>
+
+          <div class="form-group">
+            <label>Review Decision</label>
+            <select id="specDecision" class="form-control">
+              <option value="Approved">Approved: Confirm AI Diagnosis</option>
+              <option value="Modified">Modified: Adjust Stage / Plus</option>
+              <option value="Rejected">Request Retake (Quality / Artifact)</option>
+            </select>
+          </div>
+
+          <div class="form-group">
+            <label>Prescribed Treatment Plan</label>
+            <select id="specTreatmentPlan" class="form-control">
+              <option>Laser Photocoagulation (810nm Diode within 48h)</option>
+              <option>Intravitreal Anti-VEGF (Ranibizumab 0.2mg/0.02ml)</option>
+              <option>Serial Bedside Monitoring in 3-5 Days</option>
+              <option>Routine Follow-Up in 2 Weeks</option>
+            </select>
+          </div>
+
+          <div class="form-group">
+            <label>Specialist Clinical Notes & Digital Signature</label>
+            <textarea id="specNotes" class="form-control" rows="4">Confirmed Zone I Stage 3 with Plus Disease. Severe arteriolar tortuosity present in superotemporal arcade. Schedule bedside laser photocoagulation within 48 hours.</textarea>
+          </div>
+
+          <button class="btn-sage" style="width: 100%;" onclick="saveSpecialistReview()">Sign & Transmit Report to NICU</button>
+        </div>
+
+        <div class="panel-card">
+          <div class="card-header">
+            <h2>Case Review: Patient ROP-2026-001</h2>
+            <span class="badge badge-tan">Side-by-Side</span>
+          </div>
+          <div class="grid-cols-2" style="gap: 0.75rem;">
+            <div class="fundus-viewer">
+              <div class="fundus-tag">Original Scan</div>
+              <img id="specOrigImg" src="" alt="Original Scan">
+            </div>
+            <div class="fundus-viewer">
+              <div class="fundus-tag">Quantitative Vessel Overlay</div>
+              <img id="specOverlayImg" src="" alt="Vessel Overlay">
+            </div>
+          </div>
+          <div style="margin-top: 1rem; background: var(--warm-beige-panel); padding: 0.75rem; border-radius: 0.35rem; font-size: 0.78rem;">
+            <strong>Systemic Indicators:</strong> GA 27.5 wks, BW 920g, PMA 34.2 wks, Daily Weight Gain: 8.5g/day, Supplemental O2: 21 days.
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- SCREEN 9: PATIENT TIMELINE -->
+    <section id="patientTimelineView" class="view-section">
+      <div class="panel-card ss-scroll scale-in">
+        <div class="card-header">
+          <h2>Longitudinal Care Timeline & 14-Day Progression Risk</h2>
+          <span class="badge badge-terracotta" id="timelineVelocity">Rapid Progression</span>
+        </div>
+        
+        <div class="grid-cols-2" style="margin-bottom: 1.25rem;">
+          <div style="background: var(--warm-beige-panel); padding: 0.85rem; border-radius: 0.4rem;">
+            <div style="font-size: 0.75rem; color: var(--text-muted); font-weight: 600;">SYSTEMIC RISK (WINROP/CHOP-ROP)</div>
+            <div id="timelineSysRisk" style="font-size: 1.4rem; font-weight: 700; color: var(--golden-tan-dark); margin-top: 0.2rem;">74.5%</div>
+            <p style="font-size: 0.72rem; color: var(--text-muted); margin-top: 0.2rem;">Elevated baseline risk due to BW &lt; 1000g and prolonged supplemental oxygen.</p>
+          </div>
+          <div style="background: var(--warm-beige-panel); padding: 0.85rem; border-radius: 0.4rem;">
+            <div style="font-size: 0.75rem; color: var(--text-muted); font-weight: 600;">14-DAY TR-ROP RISK TRAJECTORY</div>
+            <div id="timelineTrRopRisk" style="font-size: 1.4rem; font-weight: 700; color: var(--terracotta-brown); margin-top: 0.2rem;">82.4%</div>
+            <p style="font-size: 0.72rem; color: var(--text-muted); margin-top: 0.2rem;">Probability of reaching Treatment-Requiring ROP threshold.</p>
+          </div>
+        </div>
+
+        <!-- Trajectory SVG Visualizer -->
+        <div style="background: var(--warm-beige-panel); border: 1px solid var(--warm-beige-border); border-radius: 0.4rem; padding: 1rem; margin-bottom: 1rem;">
+          <div style="font-size: 0.75rem; font-weight: 700; color: var(--terracotta-brown); margin-bottom: 0.5rem;">
+            Projected Risk Forecast (Days 0 to 14)
+          </div>
+          <svg id="timelineSvg" viewBox="0 0 700 140" style="width: 100%; height: 140px;"></svg>
+        </div>
+      </div>
+    </section>
+
+    <!-- SCREEN 10: FOLLOW-UP TRACKER -->
+    <section id="followupTrackerView" class="view-section">
+      <div class="grid-cols-2 ss-scroll scale-in">
+        <div class="panel-card">
+          <div class="card-header">
+            <h2>Smart Follow-Up Scheduling</h2>
+            <span class="badge badge-sage">Automated Dispatch</span>
+          </div>
+          <div style="margin-bottom: 1rem;">
+            <div style="font-size: 0.75rem; color: var(--text-muted); font-weight: 600;">NEXT APPOINTMENT WINDOW</div>
+            <div id="trackerNextVisit" style="font-size: 1.15rem; font-weight: 700; color: var(--terracotta-brown); margin-top: 0.25rem;">
+              Thursday, 10 October 2026 (02:00 PM)
+            </div>
+          </div>
+          <div style="margin-bottom: 1rem;">
+            <div style="font-size: 0.75rem; color: var(--text-muted); font-weight: 600;">PARENT-FRIENDLY PLAIN LANGUAGE EXPLANATION</div>
+            <p id="trackerParentSummary" style="font-size: 0.8rem; color: var(--text-main); line-height: 1.5; margin-top: 0.35rem; background: var(--warm-beige-panel); padding: 0.75rem; border-radius: 0.35rem;">
+              The blood vessels in your baby's eyes are growing unusually and need active medical attention.
+            </p>
+          </div>
+        </div>
+
+        <div class="panel-card">
+          <div class="card-header">
+            <h2>Loss-to-Follow-Up (LTFU) Alert Preview</h2>
+            <span class="badge badge-tan">WhatsApp / SMS</span>
+          </div>
+          <pre id="trackerMsgPreview" class="phone-preview"></pre>
+          <div style="margin-top: 0.75rem; display: flex; gap: 0.5rem;">
+            <button class="btn-sage" onclick="alert('Notification dispatched to parent phone.')">Simulate SMS/WhatsApp Dispatch</button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- SCREEN 11: COST ESTIMATOR -->
+    <section id="costEstimatorView" class="view-section">
+      <div class="panel-card ss-scroll scale-in" style="max-width: 720px; margin: 0 auto;">
+        <div class="card-header">
+          <h2>Government Health Scheme & Cost Estimator</h2>
+          <span class="badge badge-sage">Financial Subsidy</span>
+        </div>
+        
+        <div class="grid-cols-2">
+          <div class="form-group">
+            <label>Government / Institutional Scheme</label>
+            <select id="costScheme" class="form-control" onchange="updateCostEstimate()">
+              <option value="rbsk">Rashtriya Bal Swasthya Karyakram (RBSK - 100% Free)</option>
+              <option value="ayushman">Ayushman Bharat PM-JAY</option>
+              <option value="state_subsidy">State Neonatal Subsidy (80% Coverage)</option>
+              <option value="private">Standard Institutional Rate</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>Intervention / Procedure</label>
+            <select id="costIntervention" class="form-control" onchange="updateCostEstimate()">
+              <option value="laser">Laser Photocoagulation (810nm)</option>
+              <option value="antivegf">Intravitreal Anti-VEGF</option>
+              <option value="screening_only">ROP Screening & Tele-Consult</option>
+            </select>
+          </div>
+        </div>
+
+        <div style="background: var(--warm-beige-panel); border: 1px solid var(--warm-beige-border); border-radius: 0.4rem; padding: 1.25rem; margin: 1rem 0;">
+          <div style="display: flex; justify-content: space-between; margin-bottom: 0.5rem;">
+            <span style="font-size: 0.85rem; color: var(--text-muted);">Gross Medical Cost:</span>
+            <span id="costGross" style="font-weight: 700; color: var(--text-main);">Rs 25,000</span>
+          </div>
+          <div style="display: flex; justify-content: space-between; margin-bottom: 0.5rem;">
+            <span style="font-size: 0.85rem; color: var(--sage-green-dark);">Government / RBSK Subsidy:</span>
+            <span id="costSubsidy" style="font-weight: 700; color: var(--sage-green-dark);">- Rs 25,000</span>
+          </div>
+          <hr style="border: 0; border-top: 1px solid var(--warm-beige-deep-border); margin: 0.75rem 0;">
+          <div style="display: flex; justify-content: space-between; align-items: center;">
+            <span style="font-size: 0.95rem; font-weight: 700; color: var(--terracotta-brown);">Net Payable by Family:</span>
+            <span id="costNet" style="font-size: 1.4rem; font-weight: 800; color: var(--sage-green-dark);">Rs 0 (100% Free)</span>
+          </div>
+        </div>
+
+        <div style="display: flex; justify-content: flex-end; gap: 0.75rem;">
+          <button class="btn-primary" onclick="switchView('paymentView')">Generate Financial Voucher</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- SCREEN 12: SIMULATED PAYMENT & VOUCHER -->
+    <section id="paymentView" class="view-section">
+      <div class="panel-card ss-scroll scale-in" style="max-width: 600px; margin: 0 auto; text-align: center;">
+        <div class="card-header" style="justify-content: center;">
+          <h2>Financial Clearance & Voucher</h2>
+        </div>
+        <div style="margin: 1.5rem 0;">
+          <span class="badge badge-sage" style="font-size: 0.9rem; padding: 0.4rem 1rem;">RBSK Scheme Voucher Approved</span>
+          <div style="font-size: 1.8rem; font-weight: 800; color: var(--terracotta-brown); margin-top: 0.75rem;">Rs 0.00</div>
+          <p style="font-size: 0.78rem; color: var(--text-muted); margin-top: 0.25rem;">Zero Out-of-Pocket Expense for Family</p>
+        </div>
+
+        <div style="background: var(--warm-beige-panel); border: 1px solid var(--warm-beige-border); border-radius: 0.35rem; padding: 1rem; text-align: left; font-size: 0.8rem; margin-bottom: 1.5rem;">
+          <div><strong>Beneficiary:</strong> Baby of Sharma (ID: ROP-2026-001)</div>
+          <div style="margin-top: 0.3rem;"><strong>Voucher ID:</strong> TXN-RBSK-2026-9041</div>
+          <div style="margin-top: 0.3rem;"><strong>Authorized Center:</strong> AIIMS Regional NICU Centre</div>
+          <div style="margin-top: 0.3rem;"><strong>Procedure:</strong> Bilateral Laser Photocoagulation</div>
+        </div>
+
+        <button class="btn-sage" onclick="alert('Voucher PDF downloaded & stored in hospital billing record.')">Download Official Hospital Invoice</button>
+      </div>
+    </section>
+
+    <!-- BRAINSTORMING & OFFLINE ARCHITECTURE VIEW -->
+    <section id="brainstormingView" class="view-section">
+      <div class="panel-card ss-scroll scale-in">
+        <div class="card-header">
+          <h2>ROP-Sahayak: Master Architectural Notes & Brainstorming</h2>
+          <span class="badge badge-tan">ICROP-3 Standards</span>
+        </div>
+        <p style="font-size: 0.82rem; line-height: 1.6; color: var(--text-main); margin-bottom: 1rem;">
+          ROP-Sahayak bridges the critical shortage of pediatric retina specialists across tier-2 and rural NICUs through a dual approach:
+        </p>
+        <div class="grid-cols-2">
+          <div style="background: var(--warm-beige-panel); padding: 1rem; border-radius: 0.4rem;">
+            <h3 style="color: var(--terracotta-brown); font-size: 0.9rem;">1. Deterministic Biomarkers (No Black Box)</h3>
+            <p style="font-size: 0.78rem; color: var(--text-muted); margin-top: 0.3rem; line-height: 1.5;">
+              Clinicians demand mathematical explainability. The engine computes Arteriolar Tortuosity Index (ATI) and Venular Dilation Index (VDI) directly from vessel skeletons, preventing black-box hallucinations.
+            </p>
+          </div>
+          <div style="background: var(--warm-beige-panel); padding: 1rem; border-radius: 0.4rem;">
+            <h3 style="color: var(--sage-green-dark); font-size: 0.9rem;">2. Longitudinal Care & Loss-to-Follow-Up</h3>
+            <p style="font-size: 0.78rem; color: var(--text-muted); margin-top: 0.3rem; line-height: 1.5;">
+              ROP is a temporal disease. Combining multi-visit delta tracking with systemic factors (WINROP/CHOP-ROP) and automated SMS/WhatsApp alerts ensures zero premature infants go blind due to missed follow-ups.
+            </p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- Application Footer with Privacy Link -->
+  <footer>
+    <div>ROP-Sahayak Clinical Tele-ROP Platform • Compliant with DISHA & DPDPA Guidelines</div>
+    <div>
+      <a href="/privacy">Clinical Privacy Policy</a> • <a href="javascript:void(0);" onclick="switchView('brainstormingView')">Architecture Spec</a>
+    </div>
+  </footer>
+
+  <script src="/static/js/app.js"></script>
+</body>
+</html>
